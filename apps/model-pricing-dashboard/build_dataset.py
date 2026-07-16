@@ -177,12 +177,20 @@ FIELD_PROVENANCE = {
     "tags": FB,
 }
 
+OUT_PATH = Path(__file__).parent / "data" / "models.json"
 
-def build():
-    models = []
+
+def build_catalog():
+    """Return the model catalog as a list of normalized model dicts.
+
+    Prices are the last-known hand-encoded values. `scrape_pricing.py` reuses
+    this catalog and overwrites the price fields with freshly scraped values,
+    keeping the capability fields (context/modalities/release/tags) as fallback.
+    """
+    catalog = []
     for (provider, name, family, inp, cached, out, ctx, modalities,
          release, tags) in MODELS:
-        models.append({
+        catalog.append({
             "provider": provider,
             "name": name,
             "family": family,
@@ -194,11 +202,16 @@ def build():
             "modalities": modalities,
             "release_date": release,
             "tags": tags,
-            "provenance": FIELD_PROVENANCE,
+            "provenance": dict(FIELD_PROVENANCE),  # per-model copy (may change)
+            "price_stale": False,
         })
+    return catalog
 
+
+def assemble(models, *, last_collected=LAST_COLLECTED, refresh=None):
+    """Wrap a list of model dicts into the top-level dataset structure."""
     dataset = {
-        "last_collected": LAST_COLLECTED,
+        "last_collected": last_collected,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "currency": "USD",
         "price_unit": "per 1,000,000 tokens",
@@ -208,15 +221,25 @@ def build():
         "provenance_legend": {
             "aggregator": "Scraped from public aggregator aipricing.guru "
                           "(cross-checked with web search).",
-            "fallback": "Public provider docs / model cards (not in price tables).",
+            "fallback": "Public provider docs / model cards, or a last-known "
+                        "price kept because the live scrape didn't match "
+                        "(see price_stale).",
         },
         "models": models,
     }
+    if refresh is not None:
+        dataset["refresh"] = refresh
+    return dataset
 
-    out_path = Path(__file__).parent / "data" / "models.json"
-    out_path.write_text(json.dumps(dataset, indent=2))
-    print(f"Wrote {out_path} — {len(models)} models, "
+
+def write(dataset, path=OUT_PATH):
+    Path(path).write_text(json.dumps(dataset, indent=2))
+    print(f"Wrote {path} — {dataset['model_count']} models, "
           f"{dataset['provider_count']} providers.")
+
+
+def build():
+    write(assemble(build_catalog()))
 
 
 if __name__ == "__main__":

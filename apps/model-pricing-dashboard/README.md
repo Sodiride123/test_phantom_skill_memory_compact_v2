@@ -37,15 +37,32 @@ data itself is served from the local `data/models.json`.)
 
 ## Refresh the data
 
-Pricing/capability values live in `build_dataset.py`. To regenerate
-`data/models.json` (updates the `generated_at` timestamp):
+**Live refresh (recommended)** — scrape fresh prices from the public aggregator
+and regenerate `data/models.json` with a new `last_collected` timestamp:
+
+```bash
+python scrape_pricing.py            # scrape + write data/models.json
+python scrape_pricing.py --dry-run  # scrape + report, don't write
+```
+
+`scrape_pricing.py` fetches each provider's aggregator page via Tavily
+`extract(extract_depth="advanced")`, parses the pricing tables (columns are
+located by header name, since some pages omit the "Tier" column), and updates
+the price fields on the catalog defined in `build_dataset.py`. Capability fields
+(context / modalities / release / tags) stay hand-maintained and keep their
+`fallback` provenance.
+
+If a model can't be matched in the live table (name drift, row removed,
+transient fetch error), its **last-known price is kept** and it is flagged
+`price_stale: true` with pricing provenance downgraded to `fallback` — the
+dashboard keeps showing the row rather than dropping it. A `refresh` block in
+the JSON records how many models matched vs. were kept stale.
+
+**Offline baseline** — regenerate from the hand-encoded values only (no network):
 
 ```bash
 python build_dataset.py
 ```
-
-To refresh with **new** prices, update the `MODELS` / `LAST_COLLECTED` values in
-`build_dataset.py` (re-scrape the aggregator tables — see below) and re-run it.
 
 ## Data sources & provenance
 
@@ -101,6 +118,7 @@ only**.
 | `index.html` | Dashboard markup |
 | `styles.css` | Styling (dark theme) |
 | `app.js` | Table, filters, charts, best-value logic |
-| `build_dataset.py` | Normalizer — generates `data/models.json` |
+| `build_dataset.py` | Model catalog + normalizer — generates `data/models.json` |
+| `scrape_pricing.py` | Live pricing refresh — scrapes aggregator, regenerates dataset |
 | `data/models.json` | Normalized dataset (prices + capabilities + provenance) |
 | `screenshot.png` | Screenshot of the running dashboard |

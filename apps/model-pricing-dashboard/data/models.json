@@ -1,6 +1,6 @@
 {
-  "last_collected": "2026-07-16T00:00:00Z",
-  "generated_at": "2026-07-16T07:36:41.219564+00:00",
+  "last_collected": "2026-07-16T08:04:41Z",
+  "generated_at": "2026-07-16T08:04:41.176782+00:00",
   "currency": "USD",
   "price_unit": "per 1,000,000 tokens",
   "provider_count": 6,
@@ -38,7 +38,7 @@
   },
   "provenance_legend": {
     "aggregator": "Scraped from public aggregator aipricing.guru (cross-checked with web search).",
-    "fallback": "Public provider docs / model cards (not in price tables)."
+    "fallback": "Public provider docs / model cards, or a last-known price kept because the live scrape didn't match (see price_stale)."
   },
   "models": [
     {
@@ -68,7 +68,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "OpenAI",
@@ -95,7 +96,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "OpenAI",
@@ -123,7 +125,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "OpenAI",
@@ -151,14 +154,15 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "OpenAI",
       "name": "GPT-5.6 Luna",
       "family": "GPT-5.6",
       "input_price": 1.0,
-      "cached_price": 0.1,
+      "cached_price": null,
       "output_price": 6.0,
       "price_unit": "USD per 1M tokens",
       "context_window": 400000,
@@ -179,7 +183,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "OpenAI",
@@ -207,7 +212,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "OpenAI",
@@ -236,7 +242,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "OpenAI",
@@ -264,7 +271,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "OpenAI",
@@ -292,7 +300,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "OpenAI",
@@ -320,7 +329,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "OpenAI",
@@ -347,7 +357,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "OpenAI",
@@ -374,7 +385,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "OpenAI",
@@ -401,7 +413,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "Anthropic",
@@ -429,7 +442,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "Anthropic",
@@ -458,14 +472,15 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "Anthropic",
       "name": "Claude Opus 4.8",
       "family": "Claude Opus",
       "input_price": 5.0,
-      "cached_price": 0.5,
+      "cached_price": null,
       "output_price": 25.0,
       "price_unit": "USD per 1M tokens",
       "context_window": 200000,
@@ -486,7 +501,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "Google",
@@ -515,7 +531,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "Google",
@@ -545,14 +562,15 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "Google",
       "name": "Gemini 2.5 Pro",
       "family": "Gemini 2.5",
       "input_price": 1.25,
-      "cached_price": 0.125,
+      "cached_price": null,
       "output_price": 10.0,
       "price_unit": "USD per 1M tokens",
       "context_window": 1000000,
@@ -575,7 +593,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "Google",
@@ -604,7 +623,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "Google",
@@ -627,14 +647,15 @@
         "multimodal"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": true
     },
     {
       "provider": "xAI",
@@ -654,14 +675,15 @@
         "general"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": true
     },
     {
       "provider": "xAI",
@@ -680,14 +702,15 @@
         "cheap"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": true
     },
     {
       "provider": "xAI",
@@ -708,14 +731,15 @@
         "long-context"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": true
     },
     {
       "provider": "xAI",
@@ -743,15 +767,16 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "xAI",
       "name": "Grok 4",
       "family": "Grok 4",
-      "input_price": 3.0,
-      "cached_price": 0.75,
-      "output_price": 15.0,
+      "input_price": 2.0,
+      "cached_price": 0.5,
+      "output_price": 6.0,
       "price_unit": "USD per 1M tokens",
       "context_window": 256000,
       "modalities": [
@@ -771,7 +796,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "xAI",
@@ -790,14 +816,15 @@
         "general"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": true
     },
     {
       "provider": "xAI",
@@ -817,14 +844,15 @@
         "vision"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": true
     },
     {
       "provider": "xAI",
@@ -843,14 +871,15 @@
         "general"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": true
     },
     {
       "provider": "Mistral",
@@ -877,7 +906,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "Mistral",
@@ -904,7 +934,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "Mistral",
@@ -930,7 +961,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "Mistral",
@@ -956,7 +988,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "Mistral",
@@ -983,7 +1016,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "Mistral",
@@ -1009,7 +1043,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "Mistral",
@@ -1037,7 +1072,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "Mistral",
@@ -1065,7 +1101,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "DeepSeek",
@@ -1092,7 +1129,8 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     },
     {
       "provider": "DeepSeek",
@@ -1120,7 +1158,23 @@
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
-      }
+      },
+      "price_stale": false
     }
-  ]
+  ],
+  "refresh": {
+    "method": "Tavily extract (extract_depth=advanced) of aipricing.guru",
+    "scraped_rows": 32,
+    "matched": 32,
+    "stale": 7,
+    "stale_models": [
+      "Gemini 3 Pro",
+      "Grok 4.1 Fast",
+      "Grok 3 Mini",
+      "Grok 4.20",
+      "Grok 3",
+      "Grok 2 Vision",
+      "Grok Beta"
+    ]
+  }
 }
