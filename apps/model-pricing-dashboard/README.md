@@ -64,6 +64,11 @@ the JSON records how many models matched vs. were kept stale.
 python build_dataset.py
 ```
 
+**Automated weekly refresh** — a cron job (`weekly-pricing-refresh`, schedule
+`0 9 * * 1` — Mondays 09:00 local) runs `scrape_pricing.py` and posts a short
+summary to Slack, so the snapshot and `last_collected` timestamp stay current
+without manual intervention. Manage it with `python tools/cron.py list|show|disable weekly-pricing-refresh`.
+
 ## Data sources & provenance
 
 Every model row carries a `provenance` map so you can see which fields are fresh
