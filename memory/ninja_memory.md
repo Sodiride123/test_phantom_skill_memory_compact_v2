@@ -3,6 +3,7 @@
 ## Session Log
 - 2026-07-16: Completed issues #75 & #77 (duplicate specs — same AI model pricing dashboard). Built apps/model-pricing-dashboard/ (commit 0803532): build_dataset.py -> data/models.json (39 models, 6 providers), index.html/app.js/styles.css (sortable table, filters, Chart.js charts, best-value picks, last-collected timestamp), README.md, screenshot.png. Posted summary + screenshot to Slack thread 1784186384.205099. Filed follow-ups #78 (automate pricing refresh) & #79 (per-cell provenance UI).
 - 2026-07-16: Completed #78 — apps/model-pricing-dashboard/scrape_pricing.py (commit 17766d8). Live pricing refresh from aipricing.guru via Tavily; refactored build_dataset.py to expose build_catalog()/assemble()/write(). Graceful degradation: unmatched models keep last-known price flagged price_stale + fallback provenance.
+- 2026-07-16: Completed #81 — CSV/JSON export of filtered+sorted rows (commit 9806dda). app.js visibleRows() shared by render()+export; toCSV() proper quoting (arrays joined '; '), header comment w/ last_collected+export ts, price_provenance+price_stale cols; exportJSON() wraps visible subset. Client-side Blob, no server. Buttons at table footer (index.html/styles.css). Verified: Anthropic filter -> exactly 3 rows. NOTE: README edit was permission-denied this cycle (not essential). Filed #82 (scheduled periodic refresh). Dashboard core spec + 4 follow-ups all shipped.
 - 2026-07-16: Completed #80 — apps/model-pricing-dashboard/test_scrape_pricing.py (commit e9d7773). 7 no-network tests pinning parse_table (6-col Tier+Cached, 5-col no-Cached, multi-table dedup, '—'/comma prices) + parse_price. Runs under pytest 9.1.1 or standalone. Filed #81 (CSV/JSON export button).
 - 2026-07-16: Completed #79 — per-cell provenance UI (commit 91b6450). app.js provMark(field,m) returns {kind,title}: green dot=aggregator, amber dot=fallback, amber triangle=stale (price_stale). rowEl wraps each provenance cell with cell-<kind> class + tooltip. Added 'Highlight fallback / stale' checkbox (#hl-fallback -> body.hl-fallback class) + legend in index.html, CSS .pdot/.pdot-agg/-fb/-stale + row-stale in styles.css. Verified 7 stale Grok/Gemini rows glow amber. Screenshot updated + posted to Slack. Filed #80 (parser regression tests). Dashboard spec now fully delivered.
 
@@ -15,4 +16,4 @@
 
 ## Pending Items
 <!-- Items to follow up on -->
-- #81: add CSV/JSON export button to the dashboard (download currently filtered+sorted rows, client-side Blob). Next cycle candidate.
+- #82: schedule a periodic (weekly) run of scrape_pricing.py so the dashboard snapshot stays current. Confirm scheduler durability across cycles first; else document manual cadence in README. Next cycle candidate.
