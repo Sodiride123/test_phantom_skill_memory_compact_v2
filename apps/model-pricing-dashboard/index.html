@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Model Pricing &amp; Capabilities Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>AI Model Pricing &amp; Capabilities</h1>
+    <p class="sub">
+      Compare pricing, context windows &amp; capabilities across OpenAI, Anthropic,
+      Google, xAI, Mistral &amp; DeepSeek.
+    </p>
+    <p class="meta">
+      <span id="last-collected">Last collected: …</span>
+      &nbsp;·&nbsp;
+      <span id="counts"></span>
+      &nbsp;·&nbsp;
+      <span class="prov-note">
+        Prices <b>USD / 1M tokens</b>. Pricing = <span class="badge agg">aggregator</span>,
+        capability fields = <span class="badge fb">fallback</span> (public docs).
+      </span>
+    </p>
+  </header>
+
+  <!-- ---------------- Best value ---------------- -->
+  <section id="best-value">
+    <h2>Best value picks</h2>
+    <div class="cards" id="best-cards"></div>
+  </section>
+
+  <!-- ---------------- Charts ---------------- -->
+  <section id="charts">
+    <h2>Price comparison</h2>
+    <div class="chart-controls">
+      <label>Metric:
+        <select id="chart-metric">
+          <option value="output_price">Output price</option>
+          <option value="input_price">Input price</option>
+          <option value="blended">Blended (1:1 in/out)</option>
+        </select>
+      </label>
+      <label>View:
+        <select id="chart-view">
+          <option value="cheapest">Cheapest 15 models</option>
+          <option value="provider-avg">Average by provider</option>
+        </select>
+      </label>
+    </div>
+    <div class="chart-wrap"><canvas id="price-chart"></canvas></div>
+  </section>
+
+  <!-- ---------------- Filters + table ---------------- -->
+  <section id="table-section">
+    <h2>Comparison table</h2>
+    <div class="filters">
+      <label>Provider
+        <select id="f-provider"><option value="">All</option></select>
+      </label>
+      <label>Modality
+        <select id="f-modality"><option value="">All</option></select>
+      </label>
+      <label>Tag
+        <select id="f-tag"><option value="">All</option></select>
+      </label>
+      <label>Min context
+        <select id="f-context">
+          <option value="0">Any</option>
+          <option value="32768">≥ 32K</option>
+          <option value="131072">≥ 128K</option>
+          <option value="200000">≥ 200K</option>
+          <option value="400000">≥ 400K</option>
+          <option value="1000000">≥ 1M</option>
+        </select>
+      </label>
+      <label>Pricing tier
+        <select id="f-tier">
+          <option value="">All</option>
+          <option value="budget">Budget (&lt; $1 out)</option>
+          <option value="mid">Mid ($1–$10 out)</option>
+          <option value="premium">Premium (&gt; $10 out)</option>
+        </select>
+      </label>
+      <label class="search-label">Search
+        <input type="text" id="f-search" placeholder="model name…" />
+      </label>
+      <button id="reset-filters" type="button">Reset</button>
+    </div>
+    <div class="table-wrap">
+      <table id="model-table">
+        <thead>
+          <tr>
+            <th data-key="provider">Provider</th>
+            <th data-key="name">Model</th>
+            <th data-key="input_price" class="num">Input<br />$/1M</th>
+            <th data-key="cached_price" class="num">Cached<br />$/1M</th>
+            <th data-key="output_price" class="num">Output<br />$/1M</th>
+            <th data-key="context_window" class="num">Context</th>
+            <th data-key="modalities">Modalities</th>
+            <th data-key="release_date">Released</th>
+            <th data-key="tags">Best for</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="row-count" id="row-count"></p>
+  </section>
+
+  <footer>
+    <p>
+      Data sources: pricing scraped from public aggregator
+      <b>aipricing.guru</b>; capability fields from public provider docs
+      (flagged <i>fallback</i>). Official provider pricing pages are JS-rendered
+      and could not be reliably scraped — see README.
+    </p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

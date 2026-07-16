@@ -1,0 +1,1126 @@
+{
+  "last_collected": "2026-07-16T00:00:00Z",
+  "generated_at": "2026-07-16T07:36:41.219564+00:00",
+  "currency": "USD",
+  "price_unit": "per 1,000,000 tokens",
+  "provider_count": 6,
+  "model_count": 39,
+  "sources": {
+    "aggregator": {
+      "name": "aipricing.guru",
+      "urls": [
+        "https://www.aipricing.guru/openai-pricing",
+        "https://www.aipricing.guru/anthropic-pricing",
+        "https://www.aipricing.guru/google-ai-pricing",
+        "https://www.aipricing.guru/xai-pricing",
+        "https://www.aipricing.guru/mistral-pricing",
+        "https://www.aipricing.guru/deepseek-pricing"
+      ],
+      "note": "Server-rendered public pricing tables, last synced 2026-07-12..15. Cross-checked with Tavily web search.",
+      "scraped_via": "Tavily extract (extract_depth=advanced)"
+    },
+    "fallback": {
+      "name": "public provider docs / model cards",
+      "note": "Context window, modalities, release date and suitability tags are not in the aggregator price tables; taken from public docs as reasonable fallback values."
+    },
+    "unreliable": {
+      "name": "official provider pricing pages (NOT used for values)",
+      "urls": [
+        "https://openai.com/api/pricing",
+        "https://www.anthropic.com/pricing",
+        "https://ai.google.dev/pricing",
+        "https://x.ai/api",
+        "https://mistral.ai/pricing",
+        "https://api-docs.deepseek.com/quick_start/pricing"
+      ],
+      "note": "JS-rendered SPAs \u2014 could not be reliably scraped for live token prices. Documented per task requirements."
+    }
+  },
+  "provenance_legend": {
+    "aggregator": "Scraped from public aggregator aipricing.guru (cross-checked with web search).",
+    "fallback": "Public provider docs / model cards (not in price tables)."
+  },
+  "models": [
+    {
+      "provider": "OpenAI",
+      "name": "GPT-4o mini",
+      "family": "GPT-4o",
+      "input_price": 0.15,
+      "cached_price": 0.075,
+      "output_price": 0.6,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 128000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2024-07",
+      "tags": [
+        "cheap",
+        "general",
+        "vision"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "OpenAI",
+      "name": "GPT-5.4 nano",
+      "family": "GPT-5.4",
+      "input_price": 0.2,
+      "cached_price": 0.02,
+      "output_price": 1.25,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 400000,
+      "modalities": [
+        "text"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "cheap",
+        "general"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "OpenAI",
+      "name": "GPT-4.1 mini",
+      "family": "GPT-4.1",
+      "input_price": 0.4,
+      "cached_price": 0.1,
+      "output_price": 1.6,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 1000000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2025-04",
+      "tags": [
+        "coding",
+        "general"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "OpenAI",
+      "name": "GPT-5.4 mini",
+      "family": "GPT-5.4",
+      "input_price": 0.75,
+      "cached_price": 0.075,
+      "output_price": 4.5,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 400000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "coding",
+        "general"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "OpenAI",
+      "name": "GPT-5.6 Luna",
+      "family": "GPT-5.6",
+      "input_price": 1.0,
+      "cached_price": 0.1,
+      "output_price": 6.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 400000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "general",
+        "reasoning"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "OpenAI",
+      "name": "GPT-4.1",
+      "family": "GPT-4.1",
+      "input_price": 2.0,
+      "cached_price": 0.5,
+      "output_price": 8.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 1000000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2025-04",
+      "tags": [
+        "coding",
+        "long-context"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "OpenAI",
+      "name": "GPT-4o",
+      "family": "GPT-4o",
+      "input_price": 2.5,
+      "cached_price": 1.25,
+      "output_price": 10.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 128000,
+      "modalities": [
+        "text",
+        "vision",
+        "audio"
+      ],
+      "release_date": "2024-05",
+      "tags": [
+        "multimodal",
+        "general"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "OpenAI",
+      "name": "GPT-5.4",
+      "family": "GPT-5.4",
+      "input_price": 2.5,
+      "cached_price": 0.25,
+      "output_price": 15.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 400000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "reasoning",
+        "coding"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "OpenAI",
+      "name": "GPT-5.6 Terra",
+      "family": "GPT-5.6",
+      "input_price": 2.5,
+      "cached_price": 0.25,
+      "output_price": 15.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 400000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "reasoning",
+        "general"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "OpenAI",
+      "name": "GPT-5.5",
+      "family": "GPT-5.5",
+      "input_price": 5.0,
+      "cached_price": 0.5,
+      "output_price": 30.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 400000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2026-04-24",
+      "tags": [
+        "reasoning",
+        "coding"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "OpenAI",
+      "name": "GPT-5.6 Sol",
+      "family": "GPT-5.6",
+      "input_price": 5.0,
+      "cached_price": 0.5,
+      "output_price": 30.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 400000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "reasoning"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "OpenAI",
+      "name": "GPT-5.4 Pro",
+      "family": "GPT-5.4",
+      "input_price": 30.0,
+      "cached_price": null,
+      "output_price": 180.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 400000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "reasoning"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "OpenAI",
+      "name": "GPT-5.5 Pro",
+      "family": "GPT-5.5",
+      "input_price": 30.0,
+      "cached_price": null,
+      "output_price": 180.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 400000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "reasoning"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "Anthropic",
+      "name": "Claude Haiku 4.5",
+      "family": "Claude Haiku",
+      "input_price": 1.0,
+      "cached_price": 0.1,
+      "output_price": 5.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 200000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2025",
+      "tags": [
+        "cheap",
+        "general"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "Anthropic",
+      "name": "Claude Sonnet 5",
+      "family": "Claude Sonnet",
+      "input_price": 2.0,
+      "cached_price": 0.2,
+      "output_price": 10.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 1000000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "coding",
+        "reasoning",
+        "long-context"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "Anthropic",
+      "name": "Claude Opus 4.8",
+      "family": "Claude Opus",
+      "input_price": 5.0,
+      "cached_price": 0.5,
+      "output_price": 25.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 200000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "reasoning",
+        "coding"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "Google",
+      "name": "Gemini 2.5 Flash-Lite",
+      "family": "Gemini 2.5",
+      "input_price": 0.1,
+      "cached_price": 0.01,
+      "output_price": 0.4,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 1000000,
+      "modalities": [
+        "text",
+        "vision",
+        "audio"
+      ],
+      "release_date": "2025",
+      "tags": [
+        "cheap",
+        "multimodal"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "Google",
+      "name": "Gemini 2.5 Flash",
+      "family": "Gemini 2.5",
+      "input_price": 0.3,
+      "cached_price": 0.03,
+      "output_price": 2.5,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 1000000,
+      "modalities": [
+        "text",
+        "vision",
+        "audio"
+      ],
+      "release_date": "2025",
+      "tags": [
+        "cheap",
+        "multimodal",
+        "general"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "Google",
+      "name": "Gemini 2.5 Pro",
+      "family": "Gemini 2.5",
+      "input_price": 1.25,
+      "cached_price": 0.125,
+      "output_price": 10.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 1000000,
+      "modalities": [
+        "text",
+        "vision",
+        "audio"
+      ],
+      "release_date": "2025",
+      "tags": [
+        "reasoning",
+        "long-context",
+        "multimodal"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "Google",
+      "name": "Gemini 3.5 Flash",
+      "family": "Gemini 3.5",
+      "input_price": 1.5,
+      "cached_price": 0.15,
+      "output_price": 9.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 1000000,
+      "modalities": [
+        "text",
+        "vision",
+        "audio"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "general",
+        "multimodal"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "Google",
+      "name": "Gemini 3 Pro",
+      "family": "Gemini 3",
+      "input_price": 2.0,
+      "cached_price": 0.2,
+      "output_price": 12.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 1000000,
+      "modalities": [
+        "text",
+        "vision",
+        "audio"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "reasoning",
+        "long-context",
+        "multimodal"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "xAI",
+      "name": "Grok 4.1 Fast",
+      "family": "Grok 4.1",
+      "input_price": 0.2,
+      "cached_price": null,
+      "output_price": 0.5,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 256000,
+      "modalities": [
+        "text"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "cheap",
+        "general"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "xAI",
+      "name": "Grok 3 Mini",
+      "family": "Grok 3",
+      "input_price": 0.3,
+      "cached_price": null,
+      "output_price": 0.5,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 131072,
+      "modalities": [
+        "text"
+      ],
+      "release_date": "2025",
+      "tags": [
+        "cheap"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "xAI",
+      "name": "Grok 4.20",
+      "family": "Grok 4.20",
+      "input_price": 2.0,
+      "cached_price": 0.2,
+      "output_price": 6.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 2000000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "coding",
+        "long-context"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "xAI",
+      "name": "Grok 4.5",
+      "family": "Grok 4.5",
+      "input_price": 2.0,
+      "cached_price": 0.5,
+      "output_price": 6.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 256000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "reasoning",
+        "general"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "xAI",
+      "name": "Grok 4",
+      "family": "Grok 4",
+      "input_price": 3.0,
+      "cached_price": 0.75,
+      "output_price": 15.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 256000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "reasoning",
+        "coding"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "xAI",
+      "name": "Grok 3",
+      "family": "Grok 3",
+      "input_price": 2.0,
+      "cached_price": null,
+      "output_price": 10.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 131072,
+      "modalities": [
+        "text"
+      ],
+      "release_date": "2025",
+      "tags": [
+        "general"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "xAI",
+      "name": "Grok 2 Vision",
+      "family": "Grok 2",
+      "input_price": 2.0,
+      "cached_price": null,
+      "output_price": 10.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 32768,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2024",
+      "tags": [
+        "vision"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "xAI",
+      "name": "Grok Beta",
+      "family": "Grok",
+      "input_price": 5.0,
+      "cached_price": null,
+      "output_price": 15.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 131072,
+      "modalities": [
+        "text"
+      ],
+      "release_date": "2024",
+      "tags": [
+        "general"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "Mistral",
+      "name": "Mistral Small 4",
+      "family": "Mistral Small",
+      "input_price": 0.1,
+      "cached_price": null,
+      "output_price": 0.3,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 128000,
+      "modalities": [
+        "text"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "cheap",
+        "general"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "Mistral",
+      "name": "Devstral Small 2",
+      "family": "Devstral",
+      "input_price": 0.1,
+      "cached_price": null,
+      "output_price": 0.3,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 128000,
+      "modalities": [
+        "text"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "coding",
+        "cheap"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "Mistral",
+      "name": "Mistral NeMo",
+      "family": "Mistral NeMo",
+      "input_price": 0.15,
+      "cached_price": null,
+      "output_price": 0.15,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 128000,
+      "modalities": [
+        "text"
+      ],
+      "release_date": "2024",
+      "tags": [
+        "cheap"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "Mistral",
+      "name": "Ministral 14B",
+      "family": "Ministral",
+      "input_price": 0.2,
+      "cached_price": null,
+      "output_price": 0.2,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 128000,
+      "modalities": [
+        "text"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "cheap"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "Mistral",
+      "name": "Magistral Small",
+      "family": "Magistral",
+      "input_price": 0.5,
+      "cached_price": null,
+      "output_price": 1.5,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 128000,
+      "modalities": [
+        "text"
+      ],
+      "release_date": "2025",
+      "tags": [
+        "reasoning",
+        "cheap"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "Mistral",
+      "name": "Mixtral 8x7B",
+      "family": "Mixtral",
+      "input_price": 0.7,
+      "cached_price": null,
+      "output_price": 0.7,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 32768,
+      "modalities": [
+        "text"
+      ],
+      "release_date": "2023",
+      "tags": [
+        "cheap"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "Mistral",
+      "name": "Mistral Medium 3.5",
+      "family": "Mistral Medium",
+      "input_price": 1.5,
+      "cached_price": null,
+      "output_price": 7.5,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 128000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "general",
+        "coding"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "Mistral",
+      "name": "Pixtral Large",
+      "family": "Pixtral",
+      "input_price": 2.0,
+      "cached_price": null,
+      "output_price": 6.0,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 128000,
+      "modalities": [
+        "text",
+        "vision"
+      ],
+      "release_date": "2024",
+      "tags": [
+        "vision",
+        "multimodal"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "DeepSeek",
+      "name": "DeepSeek V4 Flash",
+      "family": "DeepSeek V4",
+      "input_price": 0.14,
+      "cached_price": 0.0028,
+      "output_price": 0.28,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 128000,
+      "modalities": [
+        "text"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "cheap",
+        "general"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    },
+    {
+      "provider": "DeepSeek",
+      "name": "DeepSeek V4 Pro",
+      "family": "DeepSeek V4",
+      "input_price": 0.435,
+      "cached_price": 0.0036,
+      "output_price": 0.87,
+      "price_unit": "USD per 1M tokens",
+      "context_window": 128000,
+      "modalities": [
+        "text"
+      ],
+      "release_date": "2026",
+      "tags": [
+        "reasoning",
+        "coding",
+        "cheap"
+      ],
+      "provenance": {
+        "input_price": "aggregator",
+        "cached_price": "aggregator",
+        "output_price": "aggregator",
+        "context_window": "fallback",
+        "modalities": "fallback",
+        "release_date": "fallback",
+        "tags": "fallback"
+      }
+    }
+  ]
+}
