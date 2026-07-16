@@ -2,7 +2,8 @@
 
 ## Session Log
 - 2026-07-16: Completed issues #75 & #77 (duplicate specs — same AI model pricing dashboard). Built apps/model-pricing-dashboard/ (commit 0803532): build_dataset.py -> data/models.json (39 models, 6 providers), index.html/app.js/styles.css (sortable table, filters, Chart.js charts, best-value picks, last-collected timestamp), README.md, screenshot.png. Posted summary + screenshot to Slack thread 1784186384.205099. Filed follow-ups #78 (automate pricing refresh) & #79 (per-cell provenance UI).
-- 2026-07-16: Completed #78 — apps/model-pricing-dashboard/scrape_pricing.py (commit 17766d8). Live pricing refresh from aipricing.guru via Tavily; refactored build_dataset.py to expose build_catalog()/assemble()/write(). Graceful degradation: unmatched models keep last-known price flagged price_stale + fallback provenance. #79 still open.
+- 2026-07-16: Completed #78 — apps/model-pricing-dashboard/scrape_pricing.py (commit 17766d8). Live pricing refresh from aipricing.guru via Tavily; refactored build_dataset.py to expose build_catalog()/assemble()/write(). Graceful degradation: unmatched models keep last-known price flagged price_stale + fallback provenance.
+- 2026-07-16: Completed #79 — per-cell provenance UI (commit 91b6450). app.js provMark(field,m) returns {kind,title}: green dot=aggregator, amber dot=fallback, amber triangle=stale (price_stale). rowEl wraps each provenance cell with cell-<kind> class + tooltip. Added 'Highlight fallback / stale' checkbox (#hl-fallback -> body.hl-fallback class) + legend in index.html, CSS .pdot/.pdot-agg/-fb/-stale + row-stale in styles.css. Verified 7 stale Grok/Gemini rows glow amber. Screenshot updated + posted to Slack. Filed #80 (parser regression tests). Dashboard spec now fully delivered.
 
 ## Technical Decisions
 - Browser skill: phantom modules live at /workspace/ninja/browser/ (NOT in the skill dir /root/.claude/skills/browser/, which only has SKILL.md). Run browser scripts from /workspace/ninja/browser/. Connect via `BrowserInterface.connect_cdp()`; `b.screenshot(path, full_page=True)` works well. Server already running (CDP localhost:9222).
@@ -13,4 +14,4 @@
 
 ## Pending Items
 <!-- Items to follow up on -->
-- #79: surface per-field provenance per-cell in the dashboard UI (also good to show price_stale flag from #78). Next cycle candidate.
+- #80: add regression tests for scrape_pricing.parse_table (aggregator layout drifts — column count varies, multi-table pages). Static fixtures, no network. Next cycle candidate.
