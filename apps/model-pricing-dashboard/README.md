@@ -120,5 +120,6 @@ only**.
 | `app.js` | Table, filters, charts, best-value logic |
 | `build_dataset.py` | Model catalog + normalizer — generates `data/models.json` |
 | `scrape_pricing.py` | Live pricing refresh — scrapes aggregator, regenerates dataset |
+| `test_scrape_pricing.py` | Regression tests for the table parser (`pytest` or standalone; no network) |
 | `data/models.json` | Normalized dataset (prices + capabilities + provenance) |
 | `screenshot.png` | Screenshot of the running dashboard |
