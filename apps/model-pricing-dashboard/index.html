@@ -87,8 +87,17 @@
       <label class="search-label">Search
         <input type="text" id="f-search" placeholder="model name…" />
       </label>
+      <label class="check-label">
+        <input type="checkbox" id="hl-fallback" /> Highlight fallback / stale
+      </label>
       <button id="reset-filters" type="button">Reset</button>
     </div>
+    <p class="prov-legend">
+      Cell provenance:
+      <span class="pdot pdot-agg"></span> scraped (aggregator)
+      &nbsp; <span class="pdot pdot-fb"></span> fallback (public docs)
+      &nbsp; <span class="pdot pdot-stale"></span> stale (last-known price kept)
+    </p>
     <div class="table-wrap">
       <table id="model-table">
         <thead>

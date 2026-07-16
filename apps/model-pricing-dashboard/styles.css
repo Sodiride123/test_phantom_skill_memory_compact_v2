@@ -144,6 +144,44 @@ tbody tr:hover { background: var(--panel); }
 .p-mistral { background: var(--mistral); }
 .p-deepseek { background: var(--deepseek); }
 
+/* ---------- Per-cell provenance ---------- */
+.pdot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-left: 6px;
+  vertical-align: middle;
+  opacity: 0.9;
+}
+.pdot-agg { background: var(--agg); }
+.pdot-fb { background: var(--fb); }
+/* stale = small amber triangle rather than a dot */
+.pdot-stale {
+  width: 0;
+  height: 0;
+  border-radius: 0;
+  background: transparent;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 7px solid var(--fb);
+}
+tbody tr.row-stale td.cell-stale { color: var(--fb); }
+body.hl-fallback td.cell-fb { background: rgba(255, 176, 32, 0.1); }
+body.hl-fallback td.cell-stale { background: rgba(255, 176, 32, 0.22); }
+
+.check-label { flex-direction: row; align-items: center; gap: 6px; cursor: pointer; }
+.check-label input { min-width: 0; }
+.prov-legend {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.prov-legend .pdot { margin: 0 4px 0 8px; }
+
 .row-count { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
 footer { padding: 18px 32px 40px; color: var(--muted); font-size: 12px; }
 footer b { color: var(--text); }

@@ -126,6 +126,21 @@ function comparator(a, b) {
   return sortDir === "asc" ? x - y : y - x;
 }
 
+// Per-cell provenance marker. Price cells that couldn't be re-scraped are
+// flagged "stale" (last-known value kept); otherwise a field's provenance is
+// aggregator (scraped) or fallback (public docs).
+function provMark(field, m) {
+  const priceField =
+    field === "input_price" || field === "cached_price" || field === "output_price";
+  if (priceField && m.price_stale) {
+    return { kind: "stale", title: "Stale — last-known price kept (live scrape didn't match)" };
+  }
+  if (m.provenance[field] === "aggregator") {
+    return { kind: "agg", title: "Scraped from public aggregator (aipricing.guru)" };
+  }
+  return { kind: "fb", title: "Fallback — public provider docs / model cards" };
+}
+
 function rowEl(m) {
   const tr = document.createElement("tr");
   const price = (v) => (v === null || v === undefined ? "—" : "$" + v.toFixed(2));
@@ -134,17 +149,24 @@ function rowEl(m) {
       ? m.context_window / 1000000 + "M"
       : Math.round(m.context_window / 1000) + "K";
   const cls = PROVIDER_CLASS[m.provider] || "";
+  if (m.price_stale) tr.classList.add("row-stale");
+
+  // Provenance-bearing cell: adds a coloured dot + tooltip + cell-<kind> class.
+  const cell = (field, inner, extra = "") => {
+    const mk = provMark(field, m);
+    return `<td class="cell-${mk.kind}${extra ? " " + extra : ""}" title="${mk.title}">${inner}<span class="pdot pdot-${mk.kind}"></span></td>`;
+  };
 
   tr.innerHTML = `
     <td><span class="prov-badge ${cls}">${m.provider}</span></td>
     <td><b>${m.name}</b><br /><span class="prov-dot">${m.family}</span></td>
-    <td class="num">${price(m.input_price)}</td>
-    <td class="num">${price(m.cached_price)}</td>
-    <td class="num">${price(m.output_price)}</td>
-    <td class="num">${ctx}</td>
-    <td>${m.modalities.map((x) => `<span class="pill">${x}</span>`).join("")}</td>
-    <td>${m.release_date}</td>
-    <td>${m.tags.map((x) => `<span class="pill">${x}</span>`).join("")}</td>`;
+    ${cell("input_price", price(m.input_price), "num")}
+    ${cell("cached_price", price(m.cached_price), "num")}
+    ${cell("output_price", price(m.output_price), "num")}
+    ${cell("context_window", ctx, "num")}
+    ${cell("modalities", m.modalities.map((x) => `<span class="pill">${x}</span>`).join(""))}
+    ${cell("release_date", m.release_date)}
+    ${cell("tags", m.tags.map((x) => `<span class="pill">${x}</span>`).join(""))}`;
   return tr;
 }
 
@@ -296,4 +318,8 @@ function attachEvents() {
   ["chart-metric", "chart-view"].forEach((id) =>
     document.getElementById(id).addEventListener("change", renderChart)
   );
+
+  document.getElementById("hl-fallback").addEventListener("change", (e) => {
+    document.body.classList.toggle("hl-fallback", e.target.checked);
+  });
 }
