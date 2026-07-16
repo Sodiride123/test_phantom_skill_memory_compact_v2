@@ -33,6 +33,7 @@ async function init() {
   MODELS = DATA.models;
 
   renderMeta();
+  renderDataHealth();
   populateFilters();
   renderBestValue();
   renderChart();
@@ -46,6 +47,48 @@ function renderMeta() {
     "Last collected: " + d.toISOString().slice(0, 10);
   document.getElementById("counts").textContent =
     `${DATA.model_count} models · ${DATA.provider_count} providers`;
+}
+
+// Read-only data-health summary: provenance mix + freshness + drift, all
+// tallied straight from data/models.json (no new data sources).
+function renderDataHealth() {
+  const el = document.getElementById("data-health");
+  if (!el) return;
+
+  // Price provenance is consistent across a model's three price fields, so
+  // count models by their input_price provenance (matches official_refresh).
+  let official = 0, aggregator = 0, fallback = 0, stale = 0, ctxOfficial = 0;
+  for (const m of MODELS) {
+    const p = m.provenance || {};
+    if (p.input_price === "official") official++;
+    else if (p.input_price === "aggregator") aggregator++;
+    else fallback++;
+    if (m.price_stale) stale++;
+    if (p.context_window === "official") ctxOfficial++;
+  }
+
+  const orr = DATA.official_refresh || {};
+  const driftCount = Array.isArray(orr.drift) ? orr.drift.length : 0;
+  const driftThresh = orr.drift_threshold_pct;
+
+  const chip = (label, cls) =>
+    `<span class="dh-chip${cls ? " " + cls : ""}">${label}</span>`;
+
+  const chips = [
+    chip(`<b>Data health</b>`, "dh-title"),
+    chip(`prices: <b>${official}</b> official · <b>${aggregator}</b> aggregator · <b>${fallback}</b> fallback`),
+    chip(`<b>${ctxOfficial}</b> context windows official`),
+    chip(`<b>${stale}</b> stale`, stale > 0 ? "warn" : ""),
+    chip(
+      driftCount > 0
+        ? `⚠ <b>${driftCount}</b> price-drift flag${driftCount === 1 ? "" : "s"} (&gt;${driftThresh}%)`
+        : `0 price-drift flags`,
+      driftCount > 0 ? "warn" : "ok",
+    ),
+  ];
+
+  el.innerHTML = chips.join("");
+  el.hidden = false;
 }
 
 // ---------------- Filters ----------------

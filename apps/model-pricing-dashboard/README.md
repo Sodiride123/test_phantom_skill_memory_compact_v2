@@ -18,6 +18,11 @@ xAI, Mistral, and DeepSeek**.
 - **"Best value" picks** — recommended models for coding, long-context
   analysis, cheap summarization, and multimodal tasks.
 - **Visible "last collected" timestamp** and per-field provenance badges.
+- **Data-health banner** (under the header) — an at-a-glance tally read straight
+  from `data/models.json`: how many models carry `official` / `aggregator` /
+  `fallback` prices, how many context windows are `official`, how many rows are
+  price-stale, and the price-drift flag count (green when 0, amber warning when
+  any `official_refresh.drift` entry exceeds the 25% threshold).
 
 All prices are normalized to **USD per 1,000,000 tokens**.
 
