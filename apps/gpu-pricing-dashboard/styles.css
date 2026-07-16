@@ -1,0 +1,104 @@
+:root {
+  --bg: #0f1420;
+  --panel: #171d2b;
+  --panel2: #1e2637;
+  --line: #2b3448;
+  --text: #e7ecf4;
+  --muted: #97a3b8;
+  --accent: #5b9bff;
+  --green: #3fb950;
+  --amber: #e3a008;
+  --chip: #263149;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+.wrap { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
+header { background: linear-gradient(180deg, #182036, #10151f); border-bottom: 1px solid var(--line); padding: 26px 0 18px; }
+h1 { margin: 0 0 6px; font-size: 26px; }
+.sub { color: var(--muted); margin: 0 0 12px; max-width: 900px; }
+.meta { color: var(--muted); font-size: 13px; }
+.meta b { color: var(--text); }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+.lg { display: inline-flex; align-items: center; gap: 6px; }
+
+h2 { font-size: 19px; margin: 30px 0 8px; }
+h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
+.hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+
+/* provenance markers */
+.pdot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.pdot-pub { background: var(--green); }
+.pdot-est { background: var(--amber); }
+.pnorm { color: var(--accent); font-weight: 700; }
+
+/* recommendations */
+.rec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.rec-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; cursor: pointer;
+  transition: border-color .15s, transform .1s;
+}
+.rec-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.rec-card .wl { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--accent); }
+.rec-card .pick { font-size: 17px; font-weight: 700; margin: 6px 0 2px; }
+.rec-card .prov { color: var(--muted); font-size: 13px; }
+.rec-card .price { font-size: 22px; font-weight: 700; margin-top: 8px; }
+.rec-card .price small { font-size: 13px; color: var(--muted); font-weight: 400; }
+
+/* charts */
+.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; }
+.chart-box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+.chart-box canvas { max-height: 300px; }
+
+/* filters */
+.filter-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.filter-bar input, .filter-bar select {
+  background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 7px; padding: 8px 10px; font-size: 14px;
+}
+#f-search { flex: 1 1 240px; }
+.btn {
+  background: var(--chip); color: var(--text); border: 1px solid var(--line);
+  border-radius: 7px; padding: 8px 14px; cursor: pointer; font-size: 14px;
+}
+.btn:hover { border-color: var(--accent); }
+.count { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+
+/* table */
+.table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; white-space: nowrap; }
+thead th {
+  background: var(--panel2); text-align: left; padding: 10px 12px; position: sticky; top: 0;
+  cursor: pointer; user-select: none; border-bottom: 1px solid var(--line);
+}
+thead th.num { text-align: right; }
+thead th:hover { color: var(--accent); }
+tbody td { padding: 9px 12px; border-bottom: 1px solid var(--line); }
+tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+tbody tr:hover { background: var(--panel); }
+tr.est td { background: rgba(227,160,8,.05); }
+body.hl-est tr.est td { background: rgba(227,160,8,.16); }
+.chip { display: inline-block; background: var(--chip); border-radius: 5px; padding: 1px 7px; margin: 1px 2px; font-size: 11.5px; color: var(--muted); }
+.price-cell { font-weight: 700; }
+a.src { color: var(--accent); text-decoration: none; }
+a.src:hover { text-decoration: underline; }
+.na { color: var(--muted); }
+
+/* modal */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+.modal.hidden { display: none; }
+.modal-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; max-width: 560px; width: 100%; padding: 24px; position: relative; }
+.modal-x { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--muted); font-size: 26px; cursor: pointer; line-height: 1; }
+.modal-card h3 { color: var(--text); font-size: 20px; margin: 0 0 4px; }
+.modal-card .m-price { font-size: 26px; font-weight: 700; margin: 10px 0; }
+.modal-card ul { padding-left: 18px; color: var(--muted); }
+.modal-card table { white-space: normal; margin-top: 10px; }
+.modal-card td { padding: 4px 8px; border: none; }
+
+#sources-list { columns: 2; color: var(--muted); font-size: 13px; }
+#sources-list a { color: var(--accent); text-decoration: none; }
+footer { border-top: 1px solid var(--line); margin-top: 40px; padding: 18px 0; color: var(--muted); font-size: 12px; }

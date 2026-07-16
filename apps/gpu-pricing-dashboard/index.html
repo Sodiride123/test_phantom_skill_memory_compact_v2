@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cloud GPU Pricing &amp; Specs Comparison</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Cloud GPU Pricing &amp; Specs Comparison</h1>
+      <p class="sub">On-demand GPU rentals across AWS, Google Cloud, Azure, Lambda, CoreWeave, RunPod and Vast.ai.
+      Prices normalized to <strong>USD per single GPU-hour</strong>. Scraped from public sources only.</p>
+      <div class="meta" id="meta"></div>
+      <div class="legend">
+        <span class="lg"><span class="pdot pdot-pub"></span> published (mirrors provider pricing)</span>
+        <span class="lg"><span class="pdot pdot-est"></span> estimated / fallback (public docs, marked)</span>
+        <span class="lg"><span class="pnorm">÷</span> per-GPU price derived from a multi-GPU node</span>
+        <label class="lg"><input type="checkbox" id="hl-est" /> highlight estimated rows</label>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- Recommendations -->
+    <section id="recs">
+      <h2>Best-value recommendations</h2>
+      <p class="hint">Lowest-cost offering that meets each workload's requirements. Click a card for the reasoning.</p>
+      <div class="rec-grid" id="rec-grid"></div>
+    </section>
+
+    <!-- Charts -->
+    <section id="charts">
+      <h2>Price comparison charts</h2>
+      <div class="chart-grid">
+        <div class="chart-box">
+          <h3>Cheapest on-demand $/GPU-hr by GPU model</h3>
+          <canvas id="chart-model"></canvas>
+        </div>
+        <div class="chart-box">
+          <h3>Cheapest $/GPU-hr by provider</h3>
+          <canvas id="chart-provider"></canvas>
+        </div>
+        <div class="chart-box">
+          <h3>Best price per GB of GPU memory ($/GB-hr)</h3>
+          <canvas id="chart-pergb"></canvas>
+        </div>
+        <div class="chart-box">
+          <h3>Single-GPU vs multi-GPU (avg $/GPU-hr)</h3>
+          <canvas id="chart-multi"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Filters -->
+    <section id="filters">
+      <h2>Comparison table</h2>
+      <div class="filter-bar">
+        <input type="search" id="f-search" placeholder="Search GPU / instance / provider…" />
+        <select id="f-provider"><option value="">All providers</option></select>
+        <select id="f-gpu"><option value="">All GPU models</option></select>
+        <select id="f-workload"><option value="">All workloads</option></select>
+        <select id="f-billing"><option value="">All billing models</option></select>
+        <select id="f-mem">
+          <option value="">Any GPU memory</option>
+          <option value="16">≥ 16 GB</option>
+          <option value="24">≥ 24 GB</option>
+          <option value="40">≥ 40 GB</option>
+          <option value="80">≥ 80 GB</option>
+          <option value="141">≥ 141 GB</option>
+        </select>
+        <select id="f-price">
+          <option value="">Any price</option>
+          <option value="0.5">≤ $0.50/hr</option>
+          <option value="1">≤ $1/hr</option>
+          <option value="2">≤ $2/hr</option>
+          <option value="4">≤ $4/hr</option>
+          <option value="8">≤ $8/hr</option>
+        </select>
+        <button id="f-reset" class="btn">Reset</button>
+      </div>
+      <div class="count" id="count"></div>
+      <div class="table-scroll">
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th data-k="provider">Provider</th>
+              <th data-k="product">Instance / product</th>
+              <th data-k="gpu_model">GPU</th>
+              <th data-k="gpu_count" class="num">#</th>
+              <th data-k="gpu_memory_gb" class="num">GPU mem</th>
+              <th data-k="total_gpu_memory_gb" class="num">Total mem</th>
+              <th data-k="vcpus" class="num">vCPU</th>
+              <th data-k="system_memory_gb" class="num">Sys RAM</th>
+              <th data-k="hourly_usd" class="num">$/GPU-hr ▲</th>
+              <th data-k="hourly_usd_total" class="num">$/node-hr</th>
+              <th data-k="spot_usd" class="num">Spot $/hr</th>
+              <th data-k="usd_per_gpu_gb" class="num">$/GB-hr</th>
+              <th data-k="region">Region</th>
+              <th data-k="billing_models">Billing</th>
+              <th data-k="workloads">Workloads</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="export">
+        <button id="exp-csv" class="btn">Export CSV</button>
+        <button id="exp-json" class="btn">Export JSON</button>
+        <span class="hint">exports the current filtered + sorted rows</span>
+      </div>
+    </section>
+
+    <section id="sources-sec">
+      <h2>Sources</h2>
+      <ul id="sources-list"></ul>
+      <p class="hint">Published values mirror providers' public pricing (via aggregators that cite provider APIs/pages).
+      Estimated values come from public documentation/reporting where a live table could not be reliably scraped, or are
+      variable marketplace averages — these are flagged in the table and never fabricated.</p>
+    </section>
+  </main>
+
+  <!-- Rec detail modal -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-card">
+      <button class="modal-x" id="modal-x">×</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <footer><div class="wrap"><span id="footer-meta"></span></div></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
