@@ -158,15 +158,13 @@ def _read_cookies(host_patterns: list[str]) -> list[dict]:
         )
 
         cursor = conn.cursor()
-        cursor.execute(
-            f"""
+        cursor.execute(f"""
             SELECT name, host_key, path, expires_utc, is_secure, is_httponly,
                    last_access_utc, has_expires, is_persistent
             FROM cookies
             WHERE {where_clauses}
             ORDER BY name
-        """
-        )
+        """)
 
         cookies = [dict(row) for row in cursor.fetchall()]
         conn.close()
@@ -229,9 +227,9 @@ def check_session(service: str) -> dict:
         profile = service
 
     result = {
-        "service": service
-        if isinstance(service, str)
-        else profile.get("label", "custom"),
+        "service": (
+            service if isinstance(service, str) else profile.get("label", "custom")
+        ),
         "label": profile.get("label", service),
         "valid": False,
         "cookies_found": [],

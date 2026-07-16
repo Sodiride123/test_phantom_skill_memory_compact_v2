@@ -52,7 +52,11 @@ from processes.orchestrator import (
     login_github_cli,
 )
 from services.cron_service import claim_cron, get_due_cron_messages
-from services.monitor_service import build_welcome_message, run_batched_response
+from services.monitor_service import (
+    build_welcome_message,
+    build_welcome_signature,
+    run_batched_response,
+)
 from tools.token_health import check_github_token
 from utils.cost import check_cost_limit
 
@@ -312,7 +316,9 @@ class PollingMonitorStrategy(MonitorStrategy):
         last_heartbeat = 0.0
         last_gh_sync_check = 0.0
 
-        iface.post_welcome_if_needed(agent, build_welcome_message(agent))
+        iface.post_welcome_if_needed(
+            agent, build_welcome_message(agent), build_welcome_signature(agent)
+        )
 
         print(
             f"\U0001f4e1 Starting monitor loop (max {MAX_RUNTIME // 60} minutes)...",

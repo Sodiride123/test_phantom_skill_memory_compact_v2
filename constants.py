@@ -28,3 +28,5 @@ SYSTEM_PROMPT_PATH_ORCHESTRATOR = (
 )
 
 SYSTEM_PROMPT_FEATURE_FLAG = "system-prompt-phantom"
+# Stop-hook chained orchestrator cycles (see orchestrator_stop_hook.py)
+STOP_HOOKS_FEATURE_FLAG = "orchestrator-stop-hooks"

@@ -35,6 +35,13 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from tenacity import (
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
+
 logger = logging.getLogger(__name__)
 
 import requests
@@ -49,6 +56,19 @@ SETTINGS_PATHS = [
     Path("/root/.claude/settings.json"),
     Path(__file__).resolve().parent.parent / "settings.json",
 ]
+_RETRIABLE_STATUS = {429, 500, 502, 503, 504}
+
+
+def _is_retriable(exc: BaseException) -> bool:
+    # Network-level errors
+    if isinstance(
+        exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)
+    ):
+        return True
+    # Transient HTTP status codes
+    if isinstance(exc, requests.exceptions.HTTPError) and exc.response is not None:
+        return exc.response.status_code in _RETRIABLE_STATUS
+    return False
 
 
 def is_event_cache_enabled() -> bool:
@@ -248,6 +268,12 @@ class AgentEventCacheClient:
             "Content-Type": "application/json",
         }
 
+    @retry(
+        stop=stop_after_attempt(3),
+        retry=retry_if_exception(_is_retriable),
+        wait=wait_exponential(multiplier=1, max=10),
+        reraise=True,
+    )
     def get_messages(self, request: GetMessagesRequest) -> GetMessagesResponse:
         """
         Fetch messages from the agent-event-cache service.

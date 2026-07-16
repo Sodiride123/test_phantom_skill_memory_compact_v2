@@ -393,7 +393,6 @@
         <div class="panel full-panel" id="orchestratorControl">
             <div class="panel-hdr">
                 <span>🎛️ Orchestrator Control</span>
-                <span class="orch-badge idle" id="orchStatusBadge"><span class="odot"></span><span id="orchStatusText">Loading…</span></span>
             </div>
             <div class="panel-body">
                 <div class="orch-toggles">
@@ -403,25 +402,13 @@
                             <div class="toggle-sub">Master switch. When off, the monitor stops launching work cycles and any running cycle exits — no further spend.</div>
                         </div>
                         <label class="switch">
-                            <input type="checkbox" id="orchEnabled">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-
-                    <div class="toggle-row">
-                        <div>
-                            <div class="toggle-label">Stop running cycle on disable</div>
-                            <div class="toggle-sub">When disabling the orchestrator, also halt the in-flight <code>ninja.service</code> cycle immediately (systemctl stop).</div>
-                        </div>
-                        <label class="switch">
-                            <input type="checkbox" id="orchStopNow" checked>
+                            <input type="checkbox" id="orchEnabled" checked>
                             <span class="slider"></span>
                         </label>
                     </div>
                 </div>
 
                 <div class="orch-actions">
-                    <button class="orch-btn" id="orchSaveBtn" onclick="saveOrchestratorConfig()">Save changes</button>
                     <span class="orch-save-note" id="orchSaveNote"></span>
                     <span class="orch-meta" id="orchMeta" style="margin-left:auto;"></span>
                 </div>
@@ -600,96 +587,39 @@
         init();
         initUpgradeButton();
 
-        /* ═══════════ ORCHESTRATOR CONTROL ═══════════ */
-        // Orchestrator toggle state machine.
-        //   orchDirty   -> user has unsaved local edits; polls must not clobber them.
-        //   orchPending -> a save is in flight / settling. While set, the UI is PINNED
-        //                  to the user's intended values and polls can neither flip the
-        //                  toggle nor release the lock. This is what kills the flip-flop:
-        //                  the backend config write is eventually consistent, so a poll
-        //                  can briefly return the old value right after a save. Pinning +
-        //                  requiring consecutive confirmations prevents any visible bounce.
-        let orchDirty = false;
-        let orchPending = null;   // { enabled, stopNow } while saving/settling, else null
-        ['orchEnabled', 'orchStopNow'].forEach(id => {
-            document.getElementById(id).addEventListener('change', () => { orchDirty = true; });
-        });
+        /* ═══════════ ORCHESTRATOR CONTROL (save-on-toggle) ═══════════ */
 
-        async function loadOrchestratorConfig() {
-            // While the user has unsaved edits, or a save is settling, keep the toggle
-            // pinned to the intended value and never overwrite it from a (possibly stale) poll.
-            if (orchDirty || orchPending) {
-                // Still refresh the read-only status badge/meta so those stay live,
-                // but leave the checkboxes exactly where the user/save put them.
-                try {
-                    const r = await fetch('/api/orchestrator/config');
-                    const d = await r.json();
-                    const cfg = d.config || {};
-                    updateOrchStatus(cfg, !!d.running);
-                } catch (e) { /* non-fatal during settling */ }
-                return;
-            }
-            try {
-                const r = await fetch('/api/orchestrator/config');
-                const d = await r.json();
-                const cfg = d.config || {};
-                const running = !!d.running;
+        // While a save is in flight for any orchestrator toggle, polls must not
+        // touch the checkboxes. A single flag is enough now that there is no
+        // "unsaved edits" concept — every change is saved immediately.
+        let orchSaving = false;
 
-                document.getElementById('orchEnabled').checked = cfg.enabled !== false;
-                updateOrchStatus(cfg, running);
-            } catch(e) { console.error('loadOrchestratorConfig:', e); }
-        }
+        const orchEnabledEl = document.getElementById('orchEnabled');
 
-        // Renders only the status badge + audit meta (never touches the checkboxes),
-        // so it is safe to call during the pinned/settling window.
-        function updateOrchStatus(cfg, running) {
+        // Wire both toggles to the same save-on-change handler.
+        orchEnabledEl.addEventListener('change', onOrchToggleChange);
 
-                /* --- status render below --- */
-                const badge = document.getElementById('orchStatusBadge');
-                const text = document.getElementById('orchStatusText');
-                badge.classList.remove('on', 'idle', 'off');
-                if (cfg.enabled === false) {
-                    badge.classList.add('off'); text.textContent = 'Disabled';
-                } else if (running) {
-                    badge.classList.add('on'); text.textContent = 'Running';
-                } else {
-                    badge.classList.add('idle'); text.textContent = 'Idle';
-                }
+        async function onOrchToggleChange(evt) {
+            const changed = evt.target;
 
-                // Audit meta
-                const meta = document.getElementById('orchMeta');
-                if (cfg.updated_at) {
-                    meta.textContent = `Last changed by ${cfg.updated_by || 'admin'} · ${formatTime(cfg.updated_at)}`;
-                } else {
-                    meta.textContent = '';
-                }
-        }
+            // The checkbox has *already* flipped to its new value by the time the
+            // 'change' event fires, so its previous value is the logical NOT.
+            const previousValue = !changed.checked;
 
-        async function saveOrchestratorConfig() {
-            const btn = document.getElementById('orchSaveBtn');
-            const enabledEl = document.getElementById('orchEnabled');
-            const stopNowEl = document.getElementById('orchStopNow');
+            // 1) Grey out BOTH toggles immediately so nothing else can be flipped
+            //    while this write is settling.
+            orchSaving = true;
+            orchEnabledEl.disabled = true;
+
             const note = document.getElementById('orchSaveNote');
-
-            const body = {
-                enabled: enabledEl.checked,
-                stop_now: stopNowEl.checked,
-                updated_by: 'admin'
-            };
-
-            // Enter the "settling" state and PIN the UI to the intended value.
-            // From here until confirmation completes, no poll can touch the toggles
-            // and the checkboxes are locked to exactly what we're saving. This is
-            // the core of the fix: it removes the window where a stale read could
-            // flip the switch back and forth.
-            orchPending = { enabled: body.enabled, stopNow: body.stop_now };
-            enabledEl.checked = body.enabled;
-            stopNowEl.checked = body.stop_now;
-            enabledEl.disabled = true;
-            stopNowEl.disabled = true;
-            btn.disabled = true;
             note.className = 'orch-save-note';
             note.textContent = 'Saving…';
+
+            // 2) Build payload from the CURRENT (post-toggle) state of both toggles.
+            const body = {
+                enabled: orchEnabledEl.checked,
+                updated_by: 'admin'
+            };
 
             try {
                 const r = await fetch('/api/orchestrator/config', {
@@ -698,61 +628,53 @@
                     body: JSON.stringify(body)
                 });
                 const d = await r.json();
+
                 if (d.ok) {
+                    // Success — the toggle keeps its new value.
                     note.className = 'orch-save-note ok';
                     note.textContent = '✓ Saved';
-                    await confirmOrchestratorSaved(body.enabled);
                 } else {
+                    // Backend rejected — revert the toggle the user changed.
+                    changed.checked = previousValue;
                     note.className = 'orch-save-note err';
                     note.textContent = '✕ ' + (d.error || 'Save failed');
                 }
-            } catch(e) {
+            } catch (e) {
+                // Network error — revert.
+                changed.checked = previousValue;
                 note.className = 'orch-save-note err';
                 note.textContent = '✕ Network error';
-                console.error('saveOrchestratorConfig:', e);
+                console.error('onOrchToggleChange:', e);
             } finally {
-                // Release the lock and re-enable controls. orchPending is cleared
-                // here as the single authoritative release point.
-                orchPending = null;
-                orchDirty = false;
-                enabledEl.disabled = false;
-                stopNowEl.disabled = false;
-                btn.disabled = false;
-                // One authoritative sync now that we've stopped pinning.
+                // Re-enable the toggles ONLY now that the write is confirmed
+                // (or reverted). This is the single point where the grey-out ends.
+                orchSaving = false;
+                orchEnabledEl.disabled = false;
+
+                // One authoritative sync of the read-only status badge/meta.
                 await loadOrchestratorConfig();
                 setTimeout(() => { note.textContent = ''; note.className = 'orch-save-note'; }, 4000);
             }
         }
 
-        // Poll the backend until it CONSISTENTLY reports the expected value.
-        // Because the config write is eventually consistent, we require several
-        // *consecutive* matching reads before we trust it - a single match could
-        // be a stale-then-fresh coincidence that causes the flip-flop. While this
-        // runs, orchPending keeps the UI pinned, so the user never sees a bounce.
-        async function confirmOrchestratorSaved(expectedEnabled, attempts = 12, delayMs = 350, requiredStreak = 2) {
-            let streak = 0;
-            for (let i = 0; i < attempts; i++) {
-                try {
-                    const r = await fetch('/api/orchestrator/config');
-                    const d = await r.json();
-                    const cfg = d.config || {};
-                    const actualEnabled = cfg.enabled !== false;
-                    if (actualEnabled === expectedEnabled) {
-                        streak++;
-                        if (streak >= requiredStreak) {
-                            return; // stable - caller's finally block releases the lock & syncs
-                        }
-                    } else {
-                        streak = 0; // reset on any mismatch (backend still catching up)
-                    }
-                } catch (e) {
-                    streak = 0;
-                    console.error('confirmOrchestratorSaved:', e);
+        async function loadOrchestratorConfig() {
+            try {
+                const r = await fetch('/api/orchestrator/config');
+                const d = await r.json();
+                const cfg = d.config || {};
+                const running = !!d.running;
+
+                // Always safe to update the read-only status badge/meta.
+                updateOrchStatus(cfg, running);
+
+                // Only sync the checkboxes when we are NOT mid-save. While saving,
+                // the toggles are greyed out and pinned to the user's choice.
+                if (!orchSaving) {
+                    orchEnabledEl.checked = cfg.enabled !== false;
                 }
-                await new Promise(res => setTimeout(res, delayMs));
+            } catch (e) {
+                console.error('loadOrchestratorConfig:', e);
             }
-            // Timed out (~4s) - caller's finally block will release the lock and
-            // do one authoritative sync regardless.
         }
 
 

@@ -162,6 +162,12 @@ baseline_version() {
     git -C "$NINJA_HOME" show "$BASELINE:VERSION" 2>/dev/null | tr -d '[:space:]' || echo ""
 }
 
+# Unmerged (conflicted) paths in the working tree — the single source used by
+# every conflict check below.
+conflicted_files()        { git -C "$NINJA_HOME" diff --name-only --diff-filter=U; }
+needs_resolution()        { [[ -n "$(conflicted_files)" ]]; }   # predicate: any conflicts?
+conflicted_files_pretty() { conflicted_files | tr '\n' ' '; }   # space-joined for messages
+
 # Ensure a local ninja-upstream exists and is a true ancestor of customer-main.
 # Order: local branch → origin branch → root it at the install commit (never
 # orphan-create; that yields no merge base and conflicts every file).
@@ -220,10 +226,10 @@ LLM_TIMEOUT="${NINJA_LLM_TIMEOUT:-300}"   # seconds; conflicts shouldn't take lo
 # Returns 0 if the merge is fully resolved (no unmerged paths / markers), else 1.
 resolve_conflicts() {
     local conflicted
-    conflicted=$(git -C "$NINJA_HOME" diff --name-only --diff-filter=U)
+    conflicted=$(conflicted_files)
     [[ -z "$conflicted" ]] && return 0
 
-    notify conflict "LLM resolving: $(echo "$conflicted" | tr '\n' ' ')"
+    notify conflict "LLM resolving: $(conflicted_files_pretty)"
 
     if [[ -n "${NINJA_LLM_RESOLVE_CMD:-}" ]]; then
         # Test hook: <cmd> <repo> <file...>
@@ -247,7 +253,7 @@ $conflicted"
 
     # Stage whatever the resolver touched, then verify nothing is left unmerged.
     git -C "$NINJA_HOME" add -A 2>/dev/null || true
-    [[ -n "$(git -C "$NINJA_HOME" diff --name-only --diff-filter=U)" ]] && return 1
+    needs_resolution && return 1
     git -C "$NINJA_HOME" grep -lE '^(<<<<<<<|=======|>>>>>>>)' -- . >/dev/null 2>&1 && return 1
     return 0
 }
@@ -393,6 +399,32 @@ upgrades_enabled() {
 #
 # The LLM resolver is an explicit opt-in only (set NINJA_LLM_RESOLVE_CMD); it is
 # NOT the default, because it can non-deterministically overwrite customer edits.
+# Files owned entirely by upstream: the customer must never "win" these on a
+# conflict, because keeping the customer's stale copy breaks version tracking
+# and other upstream invariants. Extend NINJA_UPSTREAM_OWNED (space-separated)
+# to add more without editing this list.
+UPSTREAM_OWNED_FILES="VERSION ${NINJA_UPSTREAM_OWNED:-}"
+
+# take_upstream_owned <baseline_ref> — force each upstream-owned path to the
+# baseline's version and amend the current (merge) commit so it reflects the
+# corrected content. No-op when the paths already match the baseline.
+take_upstream_owned() {
+    local baseline="$1" f changed=""
+    for f in $UPSTREAM_OWNED_FILES; do
+        # Only act if the file exists on the baseline side.
+        git cat-file -e "$baseline:$f" 2>/dev/null || continue
+        if ! git diff --quiet "HEAD:$f" "$baseline:$f" 2>/dev/null; then
+            git "${GIT_ID[@]}" checkout "$baseline" -- "$f" 2>/dev/null || continue
+            git "${GIT_ID[@]}" add -- "$f" 2>/dev/null || true
+            changed="${changed}${f} "
+        fi
+    done
+    if [[ -n "$changed" ]]; then
+        git "${GIT_ID[@]}" commit --amend --no-edit >/dev/null 2>&1 || true
+        log "upstream-owned: forced upstream version for: ${changed}"
+    fi
+}
+
 merge_upstream() {
     git tag -f "pre-upgrade-v$NEW_VERSION" >/dev/null
     log "Merging $BASELINE (v$NEW_VERSION) into $MAIN_BRANCH"
@@ -401,7 +433,7 @@ merge_upstream() {
     fi
 
     local conflicted
-    conflicted=$(git diff --name-only --diff-filter=U | tr '\n' ' ')
+    conflicted=$(conflicted_files_pretty)
 
     # --- opt-in: experimental LLM resolution -------------------------------
     if [[ -n "${NINJA_LLM_RESOLVE_CMD:-}" ]]; then
@@ -422,13 +454,53 @@ merge_upstream() {
     git merge --abort
     if git "${GIT_ID[@]}" merge -X ours \
         -m "Merge ninja v$NEW_VERSION into $MAIN_BRANCH (customer edits kept on conflicts)" "$BASELINE"; then
+        # UPSTREAM-OWNED files must never be "won" by the customer: -X ours would
+        # otherwise keep the customer's stale copy (e.g. VERSION stays on the old
+        # number, so the app misreports its version and every future upgrade
+        # re-conflicts on it forever). Force these back to the upstream side and
+        # amend the merge commit.
+        take_upstream_owned "$BASELINE"
         log_warn "customer-wins: kept customer edits over dev changes on conflicting lines in: $conflicted"
-        notify conflict "kept your edits on conflicting lines in: ${conflicted}— dev's changes there were held back for review"
+        notify info "kept your edits on conflicting lines in: ${conflicted}— dev's changes there were held back for review"
         return 0
     fi
 
     # -X ours can't auto-resolve tree-level conflicts (e.g. modify/delete).
-    local unresolved; unresolved=$(git diff --name-only --diff-filter=U | tr '\n' ' ')
+
+    # Apply customer-wins to those too: a modify/delete where the customer
+    # MODIFIED the file means "keep the customer's file" (git checkout --ours);
+    # a delete/modify where the customer DELETED it means honor the deletion
+    # (git rm). Only bail if genuinely unresolvable conflicts remain afterward.
+    local unresolved_conflicts
+    unresolved_conflicts=$(conflicted_files)
+    if [[ -n "$unresolved_conflicts" ]]; then
+        local held_back=""
+        while IFS= read -r f; do
+            [[ -z "$f" ]] && continue
+            # "ours" is (customer). If customer kept the file, keep it;
+            # If customer deleted it, rm. (Check the index, not `-e`: a
+            # modify/delete leaves a file on disk whichever side deleted.)
+            if git show ":2:$f" >/dev/null 2>&1; then
+                git checkout --ours -- "$f" 2>/dev/null || true
+                git "${GIT_ID[@]}" add -- "$f"
+            else
+                git "${GIT_ID[@]}" rm -- "$f" >/dev/null 2>&1 || true
+            fi
+            held_back="${held_back}${f} "
+        done <<< "$unresolved_conflicts"
+
+        # Any conflicts still unresolved after tree-level customer-wins?
+        if ! needs_resolution; then
+            git "${GIT_ID[@]}" commit --no-edit \
+                -m "Merge ninja v$NEW_VERSION into $MAIN_BRANCH (customer edits kept on conflicts)" >/dev/null 2>&1 \
+                || git "${GIT_ID[@]}" commit -m "Merge ninja v$NEW_VERSION into $MAIN_BRANCH (customer edits kept on conflicts)"
+            log_warn "customer-wins: resolved tree-level (modify/delete) conflicts by keeping customer state in: ${held_back}"
+            notify conflict "kept your files on modify/delete conflicts in: ${held_back}— dev's changes there were held back for review"
+            return 0
+        fi
+    fi
+
+    local unresolved; unresolved=$(conflicted_files_pretty)
     git merge --abort
     notify error "upgrade to v$NEW_VERSION needs a human — customer-wins couldn't auto-resolve: ${unresolved}. $MAIN_BRANCH untouched."
     emit_result conflict

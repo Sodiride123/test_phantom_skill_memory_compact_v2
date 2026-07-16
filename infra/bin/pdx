@@ -5,6 +5,7 @@ pdx — launcher shim.
 Finds the Ninja source tree and delegates to `tools.pdx:main`.
 Safe to symlink into /usr/local/bin or ~/.local/bin.
 """
+
 from __future__ import annotations
 
 import os

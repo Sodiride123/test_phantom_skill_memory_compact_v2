@@ -812,22 +812,15 @@ def api_set_orchestrator_config():
     """
     Update the orchestrator config. The user request consists of a JSON body with the following fields:
     - enabled: boolean, whether the orchestrator is enabled or not.
-    - stop_now: boolean, optional, if true and enabled is false, will stop the
+    - if not enabled - the orchestrator service will be stopped immediately.
+    - if enabled - the orchestrator service will be started whenever monitor next triggers it
     """
     try:
         body = request.get_json(force=True) or {}
         new_config = {"enabled": bool(body.get("enabled", True))}
         saved = save_orchestrator_config(new_config)
 
-        if saved["enabled"]:
-            # Turning ON: start the work cycle immediately.
-            subprocess.run(
-                ["systemctl", "start", ORCHESTRATOR_SERVICE],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-        elif body.get("stop_now"):
+        if not saved["enabled"]:
             # Turning OFF and caller asked to halt the running cycle now.
             subprocess.run(
                 ["systemctl", "stop", ORCHESTRATOR_SERVICE],

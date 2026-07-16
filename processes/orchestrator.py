@@ -33,6 +33,7 @@ from clients.super_ninja_client import get_thread_id
 from constants import (
     AGENT_SETTINGS_PATH,
     SANDBOX_METADATA_PATH,
+    STOP_HOOKS_FEATURE_FLAG,
     SYSTEM_PROMPT_FEATURE_FLAG,
     SYSTEM_PROMPT_PATH_ORCHESTRATOR,
 )
@@ -57,8 +58,9 @@ BLOCKED_REVIEW_EVERY = 24
 CLAUDE_SETTINGS_FILE = Path.home() / ".claude" / "settings.json"
 
 # Settings template - variables filled from /root/.claude/settings.json
-SETTINGS_TEMPLATE = string.Template(
-    """{
+# The Stop hook is registered for every launch (monitor included), but the
+# script does nothing unless run_agent() set NINJA_CYCLE_RUN=1 for the launch.
+SETTINGS_TEMPLATE = string.Template("""{
     "env": {
         "ANTHROPIC_AUTH_TOKEN": "$auth_token",
         "ANTHROPIC_BASE_URL": "$base_url",
@@ -71,10 +73,22 @@ SETTINGS_TEMPLATE = string.Template(
     },
     "attribution": {
         "commit": ""
+    },
+    "hooks": {
+        "Stop": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "python3 $stop_hook",
+                        "timeout": 60
+                    }
+                ]
+            }
+        ]
     }
 }
-"""
-)
+""")
 
 # Ensure log directory exists. /workspace/logs only exists inside the production
 # So skip the mkdir when running under pytest
@@ -331,6 +345,7 @@ def ensure_settings_file(logger: logging.Logger = None) -> bool:
             auth_token=auth_token,
             base_url=base_url,
             model=model,
+            stop_hook=str(REPO_ROOT / "orchestrator_stop_hook.py"),
         )
 
         with open(SETTINGS_FILE, "w") as f:
@@ -750,9 +765,7 @@ def build_cycle_prompt(agent: dict) -> str:
     without changing the one-issue-per-cycle contract.
     """
     base = build_prompt(agent)
-    return (
-        base
-        + """
+    return base + """
 ---
 
 ## Loop Phase 1 — WORK ONE ISSUE
@@ -807,15 +820,12 @@ phase — do not end the run after Phase 1. Per `agent-docs/LOOP.md`:
 Do NOT do large implementation work here — capture it as issues so Phase 1 can
 pick it up in a controlled, queued way.
 """
-    )
 
 
 def build_blocked_review_prompt(agent: dict) -> str:
     """Periodic prompt: re-check blocked issues and unblock any that can move."""
     base = build_prompt(agent, lean=True)
-    return (
-        base
-        + """
+    return base + """
 ---
 
 ## Blocked-Issue Review
@@ -834,7 +844,6 @@ EACH blocked issue, decide:
 
 Do NOT do implementation work here; only triage the blocked list.
 """
-    )
 
 
 def build_issues_prompt(num_issues: int, num_blocked_issues: int) -> str:
@@ -845,12 +854,21 @@ def build_issues_prompt(num_issues: int, num_blocked_issues: int) -> str:
     return f"You have {num_issues} open issues. Work on an issue, do self-reflection phase right after. No blocked issues."
 
 
+# State file the Stop hook uses to track which phase comes next. Reset at
+# every cycle launch so a killed run can't leak state into the next one.
+CYCLE_STATE_FILE = Path("/tmp/ninja_cycle_state.json")
+# Hard timeout for a whole hook-chained run (many issues in one process).
+# Safety net only — the hook's MAX_BLOCKS_PER_RUN ends the run well before.
+CYCLE_RUN_TIMEOUT = 4 * 3600
+
+
 def run_agent(
     agent: dict,
     task: str = "",
     prompt: str = None,
     timeout: int = 900,
     system_prompt_enabled: bool = False,
+    cycle: bool = False,
 ) -> None:
     """Run Claude Code for a single agent in headless autonomous mode.
 
@@ -858,9 +876,21 @@ def run_agent(
     otherwise a prompt is built from ``task``. ``timeout`` bounds the Claude
     subprocess in seconds (default 15 minutes; the merged work+reflect cycle
     passes a larger budget since it covers both phases in one invocation).
+    ``cycle=True`` arms the Stop hook (NINJA_CYCLE_RUN=1), so this one
+    launch keeps cycling work+reflect until the issue queue is empty.
     """
     # Setup logger for this subprocess
     agent_logger = setup_logging(agent["name"].lower())
+
+    # Nested-launch guard: if this process was started from INSIDE a cycle
+    # run (the agent exploring entry points like `python -m browser`), do not
+    # spawn another agent on the same session.
+    if os.environ.get("NINJA_CYCLE_RUN") == "1":
+        agent_logger.warning(
+            "⚠️ Called from inside a running cycle — refusing to launch a nested agent"
+        )
+        print("Already inside a running agent cycle — nothing to do.")
+        return
 
     agent_logger.info(f"\n{'='*60}")
     agent_logger.info(f"{agent['emoji']} Starting {agent['name']} ({agent['role']})")
@@ -902,6 +932,15 @@ def run_agent(
             f.write(prompt)
             prompt_file = f.name
 
+        subprocess_env = {
+            **os.environ,
+            "ANTHROPIC_CUSTOM_HEADERS": custom_headers,
+            "CLAUDE_PROMPT_FILE": prompt_file,
+        }
+        if cycle:
+            subprocess_env["NINJA_CYCLE_RUN"] = "1"
+            CYCLE_STATE_FILE.unlink(missing_ok=True)
+
         print(f"System prompt enabled: {system_prompt_enabled}")
         if system_prompt_enabled:
             result = subprocess.run(
@@ -919,11 +958,7 @@ def run_agent(
                 timeout=timeout,
                 capture_output=True,
                 text=True,
-                env={
-                    **os.environ,
-                    "ANTHROPIC_CUSTOM_HEADERS": custom_headers,
-                    "CLAUDE_PROMPT_FILE": prompt_file,
-                },
+                env=subprocess_env,
             )
         else:
             result = subprocess.run(
@@ -932,11 +967,7 @@ def run_agent(
                 timeout=timeout,
                 capture_output=True,
                 text=True,
-                env={
-                    **os.environ,
-                    "ANTHROPIC_CUSTOM_HEADERS": custom_headers,
-                    "CLAUDE_PROMPT_FILE": prompt_file,
-                },
+                env=subprocess_env,
             )
         if result.stdout:
             agent_logger.info(f"Claude output:\n{result.stdout}")
@@ -1214,7 +1245,27 @@ Configuration:
         # Work + reflect run as ONE Claude invocation (see build_cycle_prompt);
         # empty queue skips the cycle entirely.
         ran_work = open_issues > 0
-        if ran_work and system_prompt_enabled:
+        # Hook-chained run: one Claude launch works ALL pending cycles
+        # (work -> reflect -> next issue ...) — no relaunch between cycles.
+        hooks_enabled = is_feature_enabled(STOP_HOOKS_FEATURE_FLAG, default=False)
+        if ran_work and hooks_enabled:
+            kickoff = (
+                build_issues_prompt(open_issues, num_blocked_issues)
+                if system_prompt_enabled
+                else build_cycle_prompt(agent)
+            )
+            logger.info(
+                f"🚀 Hook-chained run: work+reflect cycles until the queue "
+                f"empties — starting with {open_issues} open issue(s)"
+            )
+            run_agent(
+                agent,
+                prompt=kickoff,
+                timeout=CYCLE_RUN_TIMEOUT,
+                system_prompt_enabled=system_prompt_enabled,
+                cycle=True,
+            )
+        elif ran_work and system_prompt_enabled:
             logger.info(
                 f"🚀 Phase 1 (work) and phase 2 (reflect) - a single run: completing {open_issues} open issue(s) and {num_blocked_issues} blocked issue(s)"
             )

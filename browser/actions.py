@@ -228,8 +228,7 @@ def execute_action(browser: BrowserInterface, action: str, params: dict) -> str:
         elif action == "extract_table":
             selector = params.get("selector", "table")
             safe_sel = selector.replace("'", "\\'")
-            table_data = browser.evaluate(
-                f"""
+            table_data = browser.evaluate(f"""
             (() => {{
                 const table = document.querySelector('{safe_sel}');
                 if (!table) return null;
@@ -243,8 +242,7 @@ def execute_action(browser: BrowserInterface, action: str, params: dict) -> str:
                 }}
                 return rows;
             }})()
-            """
-            )
+            """)
             if table_data is None:
                 return f"No table found matching: {selector}"
             # Format as readable text
@@ -257,8 +255,7 @@ def execute_action(browser: BrowserInterface, action: str, params: dict) -> str:
         elif action == "extract_links":
             selector = params.get("selector", "body")
             safe_sel = selector.replace("'", "\\'")
-            links = browser.evaluate(
-                f"""
+            links = browser.evaluate(f"""
             (() => {{
                 const container = document.querySelector('{safe_sel}') || document.body;
                 const anchors = container.querySelectorAll('a[href]');
@@ -267,8 +264,7 @@ def execute_action(browser: BrowserInterface, action: str, params: dict) -> str:
                     href: a.href
                 }}));
             }})()
-            """
-            )
+            """)
             if not links:
                 return f"No links found in: {selector}"
             lines = [f"- [{l['text']}]({l['href']})" for l in links]
@@ -330,8 +326,7 @@ def _ensure_visible(browser: BrowserInterface, selector: str):
     resolved = _resolve_selector(selector)
     try:
         safe_sel = resolved.replace("'", "\\'")
-        is_offscreen = browser.evaluate(
-            f"""
+        is_offscreen = browser.evaluate(f"""
         (() => {{
             let el = null;
             try {{ el = document.querySelector('{safe_sel}'); }} catch(e) {{}}
@@ -339,8 +334,7 @@ def _ensure_visible(browser: BrowserInterface, selector: str):
             const rect = el.getBoundingClientRect();
             return rect.bottom < 0 || rect.top > window.innerHeight;
         }})()
-        """
-        )
+        """)
         if is_offscreen:
             browser.scroll_to(resolved)
             time.sleep(0.3)

@@ -62,14 +62,12 @@ def _read_cookies_from_db(db_path: Path) -> list:
         conn = sqlite3.connect(str(db_path))
         cursor = conn.cursor()
 
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT host_key, name, path, expires_utc, is_secure, is_httponly,
                    samesite, creation_utc, last_access_utc
             FROM cookies
             ORDER BY host_key, name
-        """
-        )
+        """)
 
         for row in cursor.fetchall():
             cookies.append(
