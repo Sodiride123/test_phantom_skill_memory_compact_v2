@@ -100,9 +100,13 @@ function applyFilters(rows) {
 }
 
 // ---------------- Table ----------------
+// The currently filtered + sorted rows (what the user sees / what exports use).
+function visibleRows() {
+  return applyFilters(MODELS.slice()).sort(comparator);
+}
+
 function render() {
-  let rows = applyFilters(MODELS.slice());
-  rows.sort(comparator);
+  const rows = visibleRows();
 
   const tb = document.querySelector("#model-table tbody");
   tb.innerHTML = "";
@@ -288,6 +292,74 @@ function metricLabel(m) {
   return m === "output_price" ? "output price" : m === "input_price" ? "input price" : "blended price";
 }
 
+// ---------------- Export ----------------
+const EXPORT_COLUMNS = [
+  "provider", "name", "family",
+  "input_price", "cached_price", "output_price",
+  "context_window", "modalities", "release_date", "tags",
+];
+
+function csvCell(v) {
+  if (v === null || v === undefined) return "";
+  if (Array.isArray(v)) v = v.join("; ");
+  const s = String(v);
+  // Quote if it contains comma, quote, or newline; escape embedded quotes.
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function toCSV(rows) {
+  const header = [...EXPORT_COLUMNS, "price_provenance", "price_stale"];
+  const lines = [
+    `# AI model pricing — last_collected: ${DATA.last_collected}; exported: ${new Date().toISOString()}`,
+    `# prices in ${DATA.price_unit || "USD per 1M tokens"}; rows reflect active filters + sort`,
+    header.join(","),
+  ];
+  rows.forEach((m) => {
+    const cells = EXPORT_COLUMNS.map((c) => csvCell(m[c]));
+    cells.push(csvCell(m.provenance ? m.provenance.output_price : ""));
+    cells.push(csvCell(m.price_stale ? "true" : "false"));
+    lines.push(cells.join(","));
+  });
+  return lines.join("\n");
+}
+
+function downloadBlob(filename, text, type) {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function stamp() {
+  return (DATA.last_collected || new Date().toISOString()).slice(0, 10);
+}
+
+function exportCSV() {
+  const rows = visibleRows();
+  downloadBlob(`ai-model-pricing-${stamp()}.csv`, toCSV(rows), "text/csv;charset=utf-8");
+}
+
+function exportJSON() {
+  const rows = visibleRows();
+  const payload = {
+    last_collected: DATA.last_collected,
+    exported_at: new Date().toISOString(),
+    price_unit: DATA.price_unit,
+    row_count: rows.length,
+    models: rows,
+  };
+  downloadBlob(
+    `ai-model-pricing-${stamp()}.json`,
+    JSON.stringify(payload, null, 2),
+    "application/json"
+  );
+}
+
 // ---------------- Events ----------------
 function attachEvents() {
   document.querySelectorAll("#model-table th").forEach((th) => {
@@ -322,4 +394,7 @@ function attachEvents() {
   document.getElementById("hl-fallback").addEventListener("change", (e) => {
     document.body.classList.toggle("hl-fallback", e.target.checked);
   });
+
+  document.getElementById("export-csv").addEventListener("click", exportCSV);
+  document.getElementById("export-json").addEventListener("click", exportJSON);
 }

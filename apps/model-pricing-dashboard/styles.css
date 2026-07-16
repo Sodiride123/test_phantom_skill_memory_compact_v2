@@ -183,5 +183,25 @@ body.hl-fallback td.cell-stale { background: rgba(255, 176, 32, 0.22); }
 .prov-legend .pdot { margin: 0 4px 0 8px; }
 
 .row-count { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
+.table-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.export-controls { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.export-label { color: var(--muted); font-size: 12px; }
+.export-btn {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.export-btn:hover { border-color: var(--accent); color: var(--accent); }
 footer { padding: 18px 32px 40px; color: var(--muted); font-size: 12px; }
 footer b { color: var(--text); }
