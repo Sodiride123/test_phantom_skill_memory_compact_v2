@@ -68,22 +68,29 @@ function renderDataHealth() {
   }
 
   const orr = DATA.official_refresh || {};
-  const driftCount = Array.isArray(orr.drift) ? orr.drift.length : 0;
   const driftThresh = orr.drift_threshold_pct;
+  // Two guards: vs the prior (aggregator/fallback) value, and run-over-run vs
+  // the last price_history snapshot. Surface the combined count.
+  const vsSource = Array.isArray(orr.drift) ? orr.drift.length : 0;
+  const vsPrevRun = Array.isArray(orr.drift_vs_previous_run)
+    ? orr.drift_vs_previous_run.length : 0;
+  const driftTotal = vsSource + vsPrevRun;
 
-  const chip = (label, cls) =>
-    `<span class="dh-chip${cls ? " " + cls : ""}">${label}</span>`;
+  const chip = (label, cls, title) =>
+    `<span class="dh-chip${cls ? " " + cls : ""}"${title ? ` title="${title}"` : ""}>${label}</span>`;
 
+  const driftTip = `${vsSource} vs previous source value · ${vsPrevRun} vs last run`;
   const chips = [
     chip(`<b>Data health</b>`, "dh-title"),
     chip(`prices: <b>${official}</b> official · <b>${aggregator}</b> aggregator · <b>${fallback}</b> fallback`),
     chip(`<b>${ctxOfficial}</b> context windows official`),
     chip(`<b>${stale}</b> stale`, stale > 0 ? "warn" : ""),
     chip(
-      driftCount > 0
-        ? `⚠ <b>${driftCount}</b> price-drift flag${driftCount === 1 ? "" : "s"} (&gt;${driftThresh}%)`
+      driftTotal > 0
+        ? `⚠ <b>${driftTotal}</b> price-drift flag${driftTotal === 1 ? "" : "s"} (&gt;${driftThresh}%)`
         : `0 price-drift flags`,
-      driftCount > 0 ? "warn" : "ok",
+      driftTotal > 0 ? "warn" : "ok",
+      driftTip,
     ),
   ];
 

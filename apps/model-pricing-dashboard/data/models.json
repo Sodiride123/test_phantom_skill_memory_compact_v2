@@ -1276,6 +1276,8 @@
     "drift": [],
     "not_scraped": {
       "Mistral": "mistral.ai/pricing lists subscription plans only, not API token prices \u2014 kept on aggregator/fallback"
-    }
+    },
+    "drift_vs_previous_run": [],
+    "history_compared_to": null
   }
 }
