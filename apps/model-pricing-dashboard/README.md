@@ -60,11 +60,22 @@ existing aggregator/fallback price untouched. As of the last run it confirmed
 **18 models across 5 providers** (OpenAI 9, Google 4, Anthropic 2, DeepSeek 2,
 xAI 1). See `official_refresh` in `data/models.json` for the per-provider tally.
 
-**Price-drift sanity check** — before overwriting a price, `scrape_official.py`
-compares the incoming official value to the previous (aggregator/fallback) one
-and flags any move larger than **25%** (`official_refresh.drift` in the JSON,
-plus a `Price drift >25% vs previous: N` line on stdout). It does **not** block
-the write — it just surfaces likely parser/layout regressions for review.
+**Price-drift sanity checks** — `scrape_official.py` runs two non-blocking
+guards (neither stops the write; both just surface likely parser/layout
+regressions), each flagging any move larger than **25%**:
+
+1. *vs previous value* — before overwriting a price, the incoming official value
+   is compared to whatever the model held moments earlier (the aggregator/
+   fallback baseline). Recorded in `official_refresh.drift`.
+2. *vs previous run* — the settled prices are compared **run-over-run** against
+   the same model's like-tier value in the last snapshot, so an
+   official→official regression across weeks is caught even when
+   `scrape_pricing.py` did not run first. Recorded in
+   `official_refresh.drift_vs_previous_run` (with `history_compared_to`).
+
+Each run appends a compact snapshot (date + per-model input/cached/output +
+provenance) to **`data/price_history.json`**, keeping the last **12** runs
+(append-only, capped). Both drift counts are printed to stdout.
 
 **Aggregator refresh** — scrape prices from the public aggregator and regenerate
 `data/models.json` with a new `last_collected` timestamp:
@@ -204,4 +215,5 @@ No API keys or paid logins were used — **public sources only**.
 | `test_scrape_pricing.py` | Regression tests for the aggregator table parser (`pytest` or standalone; no network) |
 | `test_scrape_official.py` | Regression tests for the official-page parsers (`pytest` or standalone; no network) |
 | `data/models.json` | Normalized dataset (prices + capabilities + provenance) |
+| `data/price_history.json` | Append-only per-run price snapshots (last 12) for run-over-run drift |
 | `screenshot.png` | Screenshot of the running dashboard |

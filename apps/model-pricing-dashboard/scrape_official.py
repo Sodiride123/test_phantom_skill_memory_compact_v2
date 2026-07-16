@@ -104,6 +104,78 @@ def _drift_pct(old, new):
 
 
 # ---------------------------------------------------------------------------
+# Price history — an append-only log of per-run price snapshots so drift can be
+# measured RUN-OVER-RUN (e.g. an official->official regression across weeks),
+# not just against whatever value models.json held moments before this run.
+HISTORY_PATH = _APP_DIR / "data" / "price_history.json"
+HISTORY_CAP = 12  # keep the last N runs
+PRICE_FIELDS = (("input_price", "input"), ("cached_price", "cached"),
+                ("output_price", "output"))
+
+
+def _snapshot(models, date):
+    """A compact per-run record: date + per-model input/cached/output price and
+    the price provenance tier (all three price fields share a model's tier, so
+    input_price is representative)."""
+    prices = {}
+    for m in models:
+        key = f"{m['provider']}/{m['name']}"
+        prices[key] = {
+            "input": m.get("input_price"),
+            "cached": m.get("cached_price"),
+            "output": m.get("output_price"),
+            "provenance": m["provenance"].get("input_price"),
+        }
+    return {"date": date, "prices": prices}
+
+
+def _load_history(path=HISTORY_PATH):
+    """Load the snapshot list, tolerating a missing/corrupt file (-> [])."""
+    if path.exists():
+        try:
+            data = json.loads(path.read_text())
+            if isinstance(data, list):
+                return data
+        except (ValueError, OSError):
+            pass
+    return []
+
+
+def _trim_history(history, cap=HISTORY_CAP):
+    """Keep only the most recent `cap` snapshots (append-only, capped)."""
+    return history[-cap:] if cap and len(history) > cap else list(history)
+
+
+def _history_drift(prev, models, threshold=DRIFT_THRESHOLD):
+    """Drift of each model's current price vs the SAME model in the previous
+    snapshot, only when both carry the same provenance tier (so an official->
+    official move across runs is caught, but an aggregator->official swap — an
+    expected source change, not a regression — is not). Returns drift entries."""
+    out = []
+    if not prev:
+        return out
+    prices = prev.get("prices", {})
+    for m in models:
+        key = f"{m['provider']}/{m['name']}"
+        psnap = prices.get(key)
+        if not psnap:
+            continue
+        tier = m["provenance"].get("input_price")
+        if tier != psnap.get("provenance"):
+            continue  # different source tier — not a like-for-like comparison
+        for f, k in PRICE_FIELDS:
+            old, new = psnap.get(k), m.get(f)
+            pct = _drift_pct(old, new)
+            if pct is not None and pct > threshold:
+                out.append({
+                    "model": key, "field": f, "from": old, "to": new,
+                    "pct": round(pct * 100, 1), "tier": tier,
+                    "vs": prev.get("date"),
+                })
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Per-provider parsers. Each takes the rendered page text and returns
 # {normalized_name: {"name": display, "input": float|None,
 #                    "cached": float|None, "output": float|None}}.
@@ -528,7 +600,15 @@ def overlay(dry_run=False):
     dataset["provenance_legend"] = fresh["provenance_legend"]
 
     now = datetime.now(timezone.utc)
-    dataset["last_collected"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    date_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Run-over-run drift: compare the prices we just settled on to the previous
+    # snapshot's like-tier value (catches official->official regressions).
+    history = _load_history(HISTORY_PATH)
+    prev_snapshot = history[-1] if history else None
+    drift_vs_prev = _history_drift(prev_snapshot, dataset["models"])
+
+    dataset["last_collected"] = date_str
     dataset["generated_at"] = now.isoformat()
     dataset["official_refresh"] = {
         "method": "browser skill (rendered DOM) of official provider pricing + model pages",
@@ -542,6 +622,8 @@ def overlay(dry_run=False):
         ],
         "drift_threshold_pct": DRIFT_THRESHOLD * 100,
         "drift": drift,
+        "drift_vs_previous_run": drift_vs_prev,
+        "history_compared_to": prev_snapshot.get("date") if prev_snapshot else None,
         "not_scraped": {
             "Mistral": "mistral.ai/pricing lists subscription plans only, "
                        "not API token prices — kept on aggregator/fallback",
@@ -563,12 +645,27 @@ def overlay(dry_run=False):
             print(f"    {d['model']} {d['field']}: {d['from']} -> {d['to']} "
                   f"({d['pct']}%, was {d['prev_provenance']})")
 
+    prev_date = prev_snapshot.get("date") if prev_snapshot else "none"
+    print(f"\nPrice drift >{int(DRIFT_THRESHOLD * 100)}% vs previous run "
+          f"({prev_date}): {len(drift_vs_prev)}")
+    if drift_vs_prev:
+        print("  ⚠ same-tier price changed a lot since the last run:")
+        for d in drift_vs_prev:
+            print(f"    {d['model']} {d['field']}: {d['from']} -> {d['to']} "
+                  f"({d['pct']}%, {d['tier']})")
+
     if dry_run:
-        print("\n--dry-run: not writing data/models.json")
+        print("\n--dry-run: not writing data/models.json or price_history.json")
         return 0
 
     DATA_PATH.write_text(json.dumps(dataset, indent=2))
     print(f"\nWrote {DATA_PATH} — {total_matched} models upgraded to 'official'.")
+
+    # Append this run's snapshot (append-only, capped) for next run's comparison.
+    history.append(_snapshot(dataset["models"], date_str))
+    history = _trim_history(history)
+    HISTORY_PATH.write_text(json.dumps(history, indent=2))
+    print(f"Wrote {HISTORY_PATH} — {len(history)} run(s) retained (cap {HISTORY_CAP}).")
     return 0
 
 

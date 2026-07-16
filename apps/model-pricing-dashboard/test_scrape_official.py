@@ -159,6 +159,69 @@ def test_drift_threshold_flags_mismatch():
     assert so._drift_pct(10.0, 11.0) < so.DRIFT_THRESHOLD
 
 
+def _model(name, prov, inp, cached, out, tier):
+    return {
+        "name": name, "provider": prov,
+        "input_price": inp, "cached_price": cached, "output_price": out,
+        "provenance": {"input_price": tier, "cached_price": tier, "output_price": tier},
+    }
+
+
+def test_snapshot_shape():
+    models = [_model("Grok 4.5", "xAI", 2.0, 0.5, 6.0, "official")]
+    snap = so._snapshot(models, "2026-07-20T09:00:00Z")
+    assert snap["date"] == "2026-07-20T09:00:00Z"
+    assert snap["prices"]["xAI/Grok 4.5"] == {
+        "input": 2.0, "cached": 0.5, "output": 6.0, "provenance": "official",
+    }
+
+
+def test_trim_history_caps_and_keeps_newest():
+    hist = [{"date": f"d{i}"} for i in range(15)]
+    trimmed = so._trim_history(hist, cap=12)
+    assert len(trimmed) == 12
+    assert trimmed[0]["date"] == "d3"      # oldest 3 dropped
+    assert trimmed[-1]["date"] == "d14"    # newest kept
+    # under cap -> unchanged copy
+    short = [{"date": "a"}]
+    assert so._trim_history(short, cap=12) == short
+
+
+def test_load_history_missing_or_corrupt(tmp_path=None):
+    import pathlib, tempfile
+    d = pathlib.Path(tempfile.mkdtemp())
+    assert so._load_history(d / "nope.json") == []          # missing
+    bad = d / "bad.json"; bad.write_text("{ not json")
+    assert so._load_history(bad) == []                       # corrupt
+    obj = d / "obj.json"; obj.write_text('{"a": 1}')
+    assert so._load_history(obj) == []                       # not a list
+    good = d / "ok.json"; good.write_text('[{"date": "d1"}]')
+    assert so._load_history(good) == [{"date": "d1"}]
+
+
+def test_history_drift_same_tier_only():
+    prev = so._snapshot(
+        [_model("Grok 4.5", "xAI", 2.0, 0.5, 6.0, "official"),
+         _model("Mistral Small 4", "Mistral", 0.10, None, 0.30, "aggregator")],
+        "2026-07-13T09:00:00Z",
+    )
+    # Grok output jumps 6 -> 30 (official->official) => flagged.
+    # Mistral swaps aggregator->official => NOT flagged (tier changed).
+    now = [
+        _model("Grok 4.5", "xAI", 2.0, 0.5, 30.0, "official"),
+        _model("Mistral Small 4", "Mistral", 5.0, None, 9.0, "official"),
+    ]
+    drift = so._history_drift(prev, now)
+    flagged = {(d["model"], d["field"]) for d in drift}
+    assert ("xAI/Grok 4.5", "output_price") in flagged
+    assert all(d["model"] != "Mistral/Mistral Small 4" for d in drift)
+    assert drift[0]["vs"] == "2026-07-13T09:00:00Z"
+
+
+def test_history_drift_no_prev_is_empty():
+    assert so._history_drift(None, [_model("X", "Y", 1, 1, 1, "official")]) == []
+
+
 def _run_standalone():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     passed = 0
