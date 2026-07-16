@@ -127,20 +127,32 @@ and cross-checked against public web-search results. Pages used:
 
 ### Capabilities — `official` (from the provider's own page)
 
-Where a provider's own pricing page reliably states a model's **context window**,
-`scrape_official.py` upgrades that field too (strict exact-name match) and flags
-it `official`. As of the last run this corrected 3 context windows:
+`scrape_official.py` also upgrades a model's **context window** to `official`
+(strict exact-name match) when a provider states it on its own page. Context
+lives in two places depending on the provider:
+
+- **DeepSeek / xAI** — on the *pricing* page (parsed alongside prices).
+- **OpenAI / Anthropic** — on the *models* page (`developers.openai.com/api/docs/models`,
+  `docs.claude.com/en/docs/about-claude/models/overview`).
+- **Google** — on the interactive models gallery
+  (`ai.google.dev/gemini-api/docs/models`); the value only appears after
+  clicking a model card, so it is read best-effort (a card that can't be
+  matched is skipped, keeping the fallback).
+
+As of the last run **11 context windows** are flagged `official`, correcting 6:
 
 | Model | Was (fallback) | Now (official) |
 |-------|----------------|----------------|
-| DeepSeek V4 Flash | 128K | **1M** |
-| DeepSeek V4 Pro   | 128K | **1M** |
-| Grok 4.5          | 256K | **500K** |
+| GPT-5.6 Sol / Terra / Luna | 400K | **1.05M** |
+| Claude Opus 4.8 | 200K | **1M** |
+| Gemini 3.5 Flash / 3 Pro | 1M | **1,048,576** |
+| DeepSeek V4 Flash / Pro | 128K | **1M** |
+| Grok 4.5 | 256K | **500K** |
 
-See `official_refresh.context_upgrades` in `data/models.json`. Modalities are
-**not** upgraded — the pricing pages list per-token modality columns only for a
-few realtime/image models, not the main text models, so mapping them per catalog
-row was not reliable; they stay `fallback`.
+See `official_refresh.context_upgrades` / `context_pages` in `data/models.json`.
+Modalities are **not** upgraded — the pages list per-token modality columns only
+for a few realtime/image models, not the main text models, so mapping them per
+catalog row was not reliable; they stay `fallback`.
 
 ### Capabilities — `fallback` (public docs)
 

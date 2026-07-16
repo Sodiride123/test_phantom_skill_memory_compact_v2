@@ -71,8 +71,45 @@ def test_context_helper():
     assert so._context("128000") == 128000
     assert so._context("1,000,000") == 1000000
     assert so._context("2M") == 2000000
+    assert so._context("1.05M") == 1050000
     assert so._context("") is None
     assert so._context("n/a") is None
+
+
+def test_openai_context_page():
+    text = "\n".join([
+        "GPT-5.6 Sol", "Frontier model", "Model ID", "gpt-5.6-sol",
+        "Input price", "$5 / Input MTok", "Max output", "128K tokens",
+        "Context window", "1.05M", "Knowledge cutoff", "Feb 16, 2026",
+        "GPT-5.6 Luna", "Model ID", "gpt-5.6-luna",
+        "Max output", "128K tokens", "Context window", "400K",
+    ])
+    rows = so.parse_openai_context(text)
+    # value AFTER 'Context window' wins (not the 'Max output' 128K just above it)
+    assert rows["gpt56sol"] == 1050000
+    assert rows["gpt56luna"] == 400000
+
+
+def test_anthropic_context_table():
+    text = "\n".join([
+        "Feature\tClaude Fable 5\tClaude Opus 4.8\tClaude Sonnet 5\tClaude Haiku 4.5",
+        "Claude API ID\tclaude-fable-5\tclaude-opus-4-8\tclaude-sonnet-5\tclaude-haiku-4-5",
+        "Context window\t1M tokens\t1M tokens\t1M tokens\t200k tokens",
+        "Max output\t128k tokens\t128k tokens\t128k tokens\t64k tokens",
+    ])
+    rows = so.parse_anthropic_context(text)
+    assert rows["claudeopus48"] == 1000000
+    assert rows["claudesonnet5"] == 1000000
+    assert rows["claudehaiku45"] == 200000
+
+
+def test_google_context_panel():
+    text = "\n".join([
+        "Gemini 3 Flash", "Context caching", "Token limits",
+        "Input token limit", "1,048,576", "Output token limit", "65,536",
+    ])
+    assert so.parse_google_context_panel(text) == 1048576
+    assert so.parse_google_context_panel("no limits here") is None
 
 
 def test_google_section_first_dollar():

@@ -1,6 +1,6 @@
 {
-  "last_collected": "2026-07-16T16:40:10Z",
-  "generated_at": "2026-07-16T16:40:10.449243+00:00",
+  "last_collected": "2026-07-16T16:52:21Z",
+  "generated_at": "2026-07-16T16:52:21.843858+00:00",
   "currency": "USD",
   "price_unit": "per 1,000,000 tokens",
   "provider_count": 6,
@@ -180,7 +180,7 @@
       "cached_price": 0.1,
       "output_price": 6.0,
       "price_unit": "USD per 1M tokens",
-      "context_window": 400000,
+      "context_window": 1050000,
       "modalities": [
         "text",
         "vision"
@@ -194,7 +194,7 @@
         "input_price": "official",
         "cached_price": "official",
         "output_price": "official",
-        "context_window": "fallback",
+        "context_window": "official",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
@@ -299,7 +299,7 @@
       "cached_price": 0.25,
       "output_price": 15.0,
       "price_unit": "USD per 1M tokens",
-      "context_window": 400000,
+      "context_window": 1050000,
       "modalities": [
         "text",
         "vision"
@@ -313,7 +313,7 @@
         "input_price": "official",
         "cached_price": "official",
         "output_price": "official",
-        "context_window": "fallback",
+        "context_window": "official",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
@@ -359,7 +359,7 @@
       "cached_price": 0.5,
       "output_price": 30.0,
       "price_unit": "USD per 1M tokens",
-      "context_window": 400000,
+      "context_window": 1050000,
       "modalities": [
         "text",
         "vision"
@@ -372,7 +372,7 @@
         "input_price": "official",
         "cached_price": "official",
         "output_price": "official",
-        "context_window": "fallback",
+        "context_window": "official",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
@@ -460,7 +460,7 @@
         "input_price": "official",
         "cached_price": "official",
         "output_price": "official",
-        "context_window": "fallback",
+        "context_window": "official",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
@@ -491,12 +491,13 @@
         "input_price": "aggregator",
         "cached_price": "aggregator",
         "output_price": "aggregator",
-        "context_window": "fallback",
+        "context_window": "official",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": false
+      "price_stale": false,
+      "official_source": "https://docs.claude.com/en/docs/about-claude/models/overview"
     },
     {
       "provider": "Anthropic",
@@ -506,7 +507,7 @@
       "cached_price": 0.5,
       "output_price": 25.0,
       "price_unit": "USD per 1M tokens",
-      "context_window": 200000,
+      "context_window": 1000000,
       "modalities": [
         "text",
         "vision"
@@ -520,7 +521,7 @@
         "input_price": "official",
         "cached_price": "official",
         "output_price": "official",
-        "context_window": "fallback",
+        "context_window": "official",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
@@ -631,7 +632,7 @@
       "cached_price": 0.15,
       "output_price": 9.0,
       "price_unit": "USD per 1M tokens",
-      "context_window": 1000000,
+      "context_window": 1048576,
       "modalities": [
         "text",
         "vision",
@@ -646,7 +647,7 @@
         "input_price": "official",
         "cached_price": "official",
         "output_price": "official",
-        "context_window": "fallback",
+        "context_window": "official",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
@@ -662,7 +663,7 @@
       "cached_price": 0.2,
       "output_price": 12.0,
       "price_unit": "USD per 1M tokens",
-      "context_window": 1000000,
+      "context_window": 1048576,
       "modalities": [
         "text",
         "vision",
@@ -678,12 +679,13 @@
         "input_price": "fallback",
         "cached_price": "fallback",
         "output_price": "fallback",
-        "context_window": "fallback",
+        "context_window": "official",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": true
+      "price_stale": true,
+      "official_source": "https://ai.google.dev/gemini-api/docs/models"
     },
     {
       "provider": "xAI",
@@ -1209,13 +1211,18 @@
     ]
   },
   "official_refresh": {
-    "method": "browser skill (rendered DOM) of official provider pricing pages",
+    "method": "browser skill (rendered DOM) of official provider pricing + model pages",
     "pages": {
       "OpenAI": "https://developers.openai.com/api/docs/pricing",
       "Anthropic": "https://docs.claude.com/en/docs/about-claude/pricing",
       "Google": "https://ai.google.dev/gemini-api/docs/pricing",
       "xAI": "https://docs.x.ai/developers/pricing",
       "DeepSeek": "https://api-docs.deepseek.com/quick_start/pricing"
+    },
+    "context_pages": {
+      "OpenAI": "https://developers.openai.com/api/docs/models",
+      "Anthropic": "https://docs.claude.com/en/docs/about-claude/models/overview",
+      "Google": "https://ai.google.dev/gemini-api/docs/models"
     },
     "matched": 18,
     "by_provider": {
@@ -1266,19 +1273,34 @@
     ],
     "context_upgrades": [
       {
-        "model": "xAI/Grok 4.5",
-        "from": 256000,
-        "to": 500000
+        "model": "OpenAI/GPT-5.6 Luna",
+        "from": 400000,
+        "to": 1050000
       },
       {
-        "model": "DeepSeek/DeepSeek V4 Flash",
-        "from": 128000,
+        "model": "OpenAI/GPT-5.6 Terra",
+        "from": 400000,
+        "to": 1050000
+      },
+      {
+        "model": "OpenAI/GPT-5.6 Sol",
+        "from": 400000,
+        "to": 1050000
+      },
+      {
+        "model": "Anthropic/Claude Opus 4.8",
+        "from": 200000,
         "to": 1000000
       },
       {
-        "model": "DeepSeek/DeepSeek V4 Pro",
-        "from": 128000,
-        "to": 1000000
+        "model": "Google/Gemini 3.5 Flash",
+        "from": 1000000,
+        "to": 1048576
+      },
+      {
+        "model": "Google/Gemini 3 Pro",
+        "from": 1000000,
+        "to": 1048576
       }
     ],
     "not_scraped": {

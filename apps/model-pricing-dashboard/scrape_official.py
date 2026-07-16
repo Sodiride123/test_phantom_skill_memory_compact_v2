@@ -257,6 +257,100 @@ PARSERS = {
 
 
 # ---------------------------------------------------------------------------
+# Context windows from the providers' own MODEL / DOCS pages.
+#
+# Prices for OpenAI/Anthropic/Google sit on the *pricing* page, but the
+# context window is stated on the *models* page instead — a different layout,
+# so these get their own parsers. DeepSeek/xAI carry context on the pricing
+# page already (see parse_deepseek / parse_xai).
+# ---------------------------------------------------------------------------
+
+# OpenAI/Anthropic model pages are plain rendered text -> testable text parsers.
+DOCS_PAGES = {
+    "OpenAI": "https://developers.openai.com/api/docs/models",
+    "Anthropic": "https://docs.claude.com/en/docs/about-claude/models/overview",
+}
+# Google's models page is an interactive gallery — the context window only
+# appears after clicking a model card, so it is handled separately.
+GOOGLE_MODELS_PAGE = "https://ai.google.dev/gemini-api/docs/models"
+
+# For the official_source tooltip when a model is matched on context only.
+CONTEXT_SOURCES = {
+    "OpenAI": DOCS_PAGES["OpenAI"],
+    "Anthropic": DOCS_PAGES["Anthropic"],
+    "Google": GOOGLE_MODELS_PAGE,
+}
+
+
+def parse_openai_context(text: str):
+    """OpenAI models page: per-model blocks with a 'Model ID' label (value on
+    the next line, e.g. 'gpt-5.6-sol') and a 'Context window' label (value on
+    the next line, e.g. '1.05M'). Returns {norm_id: ctx_int}."""
+    rows = {}
+    lines = [l.strip() for l in text.splitlines()]
+
+    def next_value(i):
+        j = i + 1
+        while j < len(lines) and not lines[j]:
+            j += 1
+        return (lines[j], j) if j < len(lines) else (None, j)
+
+    cur = None
+    i = 0
+    while i < len(lines):
+        if lines[i] == "Model ID":
+            val, j = next_value(i)
+            cur = norm(val) if val else None
+            i = j + 1
+            continue
+        if lines[i] == "Context window" and cur:
+            val, j = next_value(i)
+            c = _context(val) if val else None
+            if c:
+                rows[cur] = c
+            i = j + 1
+            continue
+        i += 1
+    return rows
+
+
+def parse_anthropic_context(text: str):
+    """Anthropic models overview: a transposed comparison table — a header row
+    'Feature<tab>Model A<tab>Model B<tab>…' and a 'Context window<tab>1M
+    tokens<tab>…' row aligned by column. Returns {norm_name: ctx_int}."""
+    rows = {}
+    names = None
+    for line in text.splitlines():
+        cells = [c.strip() for c in line.split("\t")]
+        head = cells[0].lower()
+        if head == "feature" and len(cells) >= 2:
+            names = cells[1:]
+        elif head == "context window" and names and len(cells) >= 2:
+            for idx, nm in enumerate(names):
+                if idx + 1 < len(cells):
+                    c = _context(cells[idx + 1].lower().replace("tokens", "").strip())
+                    if c:
+                        rows[norm(nm)] = c
+    return rows
+
+
+def parse_google_context_panel(text: str):
+    """Text of a Google model card after clicking it — find 'Input token limit'
+    followed by the value (e.g. '1,048,576'). Returns ctx_int or None."""
+    lines = [l.strip() for l in text.splitlines()]
+    for i, l in enumerate(lines):
+        if l.lower().startswith("input token limit"):
+            # value may trail on the same line or sit on the next non-empty line
+            same = _context(re.sub(r"(?i)^input token limit\W*", "", l).strip())
+            if same:
+                return same
+            for nx in lines[i + 1:]:
+                if nx:
+                    return _context(nx)
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Browser scrape
 # ---------------------------------------------------------------------------
 
@@ -286,6 +380,59 @@ def scrape(verbose=True):
     return out
 
 
+DOCS_CONTEXT_PARSERS = {
+    "OpenAI": parse_openai_context,
+    "Anthropic": parse_anthropic_context,
+}
+
+
+def scrape_google_context(browser, model_names, verbose=True):
+    """Best-effort: Google's context window only shows after clicking a model
+    card. For each target name, re-open the gallery, click it, read the panel.
+    Any failure (name not on the gallery, ambiguous click) is skipped."""
+    rows = {}
+    for name in model_names:
+        try:
+            browser.goto(GOOGLE_MODELS_PAGE, wait_until="load")
+            browser.sleep(3)
+            browser.click(f"text={name}")
+            browser.sleep(2)
+            c = parse_google_context_panel(browser.text("body") or "")
+            if c:
+                rows[norm(name)] = c
+        except Exception:  # noqa: BLE001
+            continue
+    if verbose:
+        print(f"  ✓ Google docs: {len(rows)} context windows (interactive)")
+    return rows
+
+
+def scrape_context(google_names, verbose=True):
+    """Render the providers' MODEL pages and parse context windows.
+    Returns {provider: {norm_name: ctx_int}} for OpenAI/Anthropic/Google."""
+    from browser_interface import BrowserInterface
+    browser = BrowserInterface.connect_cdp()
+    out = {}
+    for provider, url in DOCS_PAGES.items():
+        try:
+            rows = DOCS_CONTEXT_PARSERS[provider](_get_text(browser, url))
+        except Exception as e:  # noqa: BLE001
+            rows = {}
+            if verbose:
+                print(f"  ! {provider} docs: {str(e).splitlines()[0]}")
+        out[provider] = rows
+        if verbose:
+            print(f"  ✓ {provider} docs: {len(rows)} context windows from {url}")
+    try:
+        out["Google"] = scrape_google_context(browser, google_names, verbose=verbose)
+    except Exception as e:  # noqa: BLE001
+        out["Google"] = {}
+        if verbose:
+            print(f"  ! Google docs: {str(e).splitlines()[0]}")
+    browser.stop()
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Overlay
 # ---------------------------------------------------------------------------
@@ -298,6 +445,19 @@ def overlay(dry_run=False):
     dataset = json.loads(DATA_PATH.read_text())
     print("Rendering official provider pricing pages…")
     official = scrape()
+
+    # Context windows: from pricing rows (DeepSeek/xAI) + model pages (OpenAI/
+    # Anthropic/Google). Merge into {provider: {norm_name: ctx_int}}.
+    ctx_map = {}
+    for prov, rows in official.items():
+        for nm, r in rows.items():
+            if r.get("context"):
+                ctx_map.setdefault(prov, {})[nm] = r["context"]
+    google_names = [m["name"] for m in dataset["models"] if m["provider"] == "Google"]
+    print("Rendering official provider model pages for context windows…")
+    for prov, rows in scrape_context(google_names).items():
+        for nm, c in rows.items():
+            ctx_map.setdefault(prov, {})[nm] = c
 
     per_provider = {}
     confirmed_names = []
@@ -322,14 +482,15 @@ def overlay(dry_run=False):
             total_matched += 1
             confirmed_names.append(f"{prov}/{m['name']}")
 
-        # Capability upgrade — context window, where the official page states it.
-        if hit and hit.get("context"):
+        # Capability upgrade — context window from the official pages.
+        cwin = ctx_map.get(prov, {}).get(norm(m["name"]))
+        if cwin:
             old = m.get("context_window")
-            m["context_window"] = hit["context"]
+            m["context_window"] = cwin
             m["provenance"]["context_window"] = bd.OFFICIAL
-            m.setdefault("official_source", OFFICIAL_PAGES[prov])
-            if old != hit["context"]:
-                context_upgrades.append((f"{prov}/{m['name']}", old, hit["context"]))
+            m.setdefault("official_source", CONTEXT_SOURCES.get(prov, OFFICIAL_PAGES.get(prov)))
+            if old != cwin:
+                context_upgrades.append((f"{prov}/{m['name']}", old, cwin))
 
     # Refresh top-level provenance metadata (adds the 'official' tier).
     fresh = bd.assemble(dataset["models"])
@@ -340,8 +501,9 @@ def overlay(dry_run=False):
     dataset["last_collected"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     dataset["generated_at"] = now.isoformat()
     dataset["official_refresh"] = {
-        "method": "browser skill (rendered DOM) of official provider pricing pages",
+        "method": "browser skill (rendered DOM) of official provider pricing + model pages",
         "pages": OFFICIAL_PAGES,
+        "context_pages": {**DOCS_PAGES, "Google": GOOGLE_MODELS_PAGE},
         "matched": total_matched,
         "by_provider": {p: s for p, s in per_provider.items()},
         "confirmed": confirmed_names,
