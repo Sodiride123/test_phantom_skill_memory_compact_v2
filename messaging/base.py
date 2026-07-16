@@ -138,7 +138,9 @@ class MessagingInterface(ABC):
         """
 
     @abstractmethod
-    def post_welcome_if_needed(self, agent: dict, welcome_text: str) -> bool:
+    def post_welcome_if_needed(
+        self, agent: dict, welcome_text: str, welcome_signature: str
+    ) -> bool:
         """Post ``welcome_text`` if the channel has no prior human messages.
 
         Idempotent — checks both a persisted flag in ``agent_data`` and a

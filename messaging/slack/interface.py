@@ -182,121 +182,6 @@ except ImportError:
 
 
 # ============================================================================
-# Retry Logic with Exponential Backoff
-# ============================================================================
-
-
-def retry_with_backoff(
-    max_retries: int = 5, base_delay: float = 1.0, max_delay: float = 60.0
-):
-    """
-    Decorator that retries a function with exponential backoff on rate limiting or transient errors.
-
-    Args:
-        max_retries: Maximum number of retry attempts (default: 5)
-        base_delay: Initial delay in seconds (default: 1.0)
-        max_delay: Maximum delay in seconds (default: 60.0)
-
-    Handles:
-        - HTTP 429 (Too Many Requests / Rate Limited)
-        - HTTP 500, 502, 503, 504 (Server errors)
-        - Slack API rate_limited errors
-        - Connection errors
-    """
-
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            last_exception = None
-
-            for attempt in range(max_retries + 1):
-                try:
-                    result = func(*args, **kwargs)
-
-                    # Check if result is a dict with Slack API error
-                    if isinstance(result, dict):
-                        if (
-                            result.get("error") == "ratelimited"
-                            or result.get("error") == "rate_limited"
-                        ):
-                            retry_after = result.get(
-                                "retry_after", base_delay * (2**attempt)
-                            )
-                            if attempt < max_retries:
-                                delay = min(float(retry_after), max_delay)
-                                print(
-                                    f"[Rate Limited] Retry {attempt + 1}/{max_retries} after {delay:.1f}s...",
-                                    file=sys.stderr,
-                                )
-                                time.sleep(delay)
-                                continue
-
-                    return result
-
-                except requests.exceptions.HTTPError as e:
-                    last_exception = e
-                    status_code = (
-                        e.response.status_code if e.response is not None else 0
-                    )
-
-                    # Rate limited
-                    if status_code == 429:
-                        retry_after = e.response.headers.get(
-                            "Retry-After", base_delay * (2**attempt)
-                        )
-                        if attempt < max_retries:
-                            delay = min(float(retry_after), max_delay)
-                            print(
-                                f"[HTTP 429 Rate Limited] Retry {attempt + 1}/{max_retries} after {delay:.1f}s...",
-                                file=sys.stderr,
-                            )
-                            time.sleep(delay)
-                            continue
-
-                    # Server errors (retriable)
-                    elif status_code in (500, 502, 503, 504):
-                        if attempt < max_retries:
-                            delay = min(base_delay * (2**attempt), max_delay)
-                            print(
-                                f"[HTTP {status_code}] Retry {attempt + 1}/{max_retries} after {delay:.1f}s...",
-                                file=sys.stderr,
-                            )
-                            time.sleep(delay)
-                            continue
-
-                    # Non-retriable HTTP error
-                    raise
-
-                except (
-                    requests.exceptions.ConnectionError,
-                    requests.exceptions.Timeout,
-                ) as e:
-                    last_exception = e
-                    if attempt < max_retries:
-                        delay = min(base_delay * (2**attempt), max_delay)
-                        print(
-                            f"[Connection Error] Retry {attempt + 1}/{max_retries} after {delay:.1f}s...",
-                            file=sys.stderr,
-                        )
-                        time.sleep(delay)
-                        continue
-                    raise
-
-                except requests.exceptions.RequestException as e:
-                    # Other request exceptions - don't retry
-                    raise
-
-            # If we've exhausted all retries, raise the last exception
-            if last_exception:
-                raise last_exception
-            return result
-
-        return wrapper
-
-    return decorator
-
-
-# ============================================================================
 # Sandbox URL Conversion
 # ============================================================================
 # Converts 0.0.0.0:<port> references in messages to public sandbox URLs.
@@ -691,7 +576,9 @@ def get_slack_tokens(
 
             # Reject user-only token
             if not tokens.bot_token and user_token:
-                print("❌ ERROR: Only a user token (xoxp-*) was found.", file=sys.stderr)
+                print(
+                    "❌ ERROR: Only a user token (xoxp-*) was found.", file=sys.stderr
+                )
                 print(
                     "   This interface requires a bot token (xoxb-*).", file=sys.stderr
                 )
@@ -1987,9 +1874,7 @@ def cmd_say(client: SlackClient, tokens: SlackTokens, args) -> None:
     agent = (
         args.agent.lower()
         if hasattr(args, "agent") and args.agent
-        else config.default_agent.lower()
-        if config.default_agent
-        else None
+        else config.default_agent.lower() if config.default_agent else None
     )
 
     if not agent:
@@ -2237,7 +2122,9 @@ def cmd_read(client: SlackClient, tokens: SlackTokens, args) -> None:
 
         # Flag audio/voice messages so agents know to transcribe them
         if has_audio:
-            print(f"│  🎤 [Voice/Audio Message — transcribe using utils transcript API]")
+            print(
+                f"│  🎤 [Voice/Audio Message — transcribe using utils transcript API]"
+            )
 
         # Flag image attachments
         for img in image_files:
@@ -3782,7 +3669,9 @@ class SlackInterface(MessagingInterface):
             if reply_id:
                 agent_data.setdefault("seen_replies", []).append(reply_id)
 
-    def post_welcome_if_needed(self, agent: dict, welcome_text: str) -> bool:
+    def post_welcome_if_needed(
+        self, agent: dict, welcome_text: str, welcome_signature: str
+    ) -> bool:
         """Post ``welcome_text`` if the channel has no prior human messages.
 
         Idempotency layers:
@@ -3811,7 +3700,6 @@ class SlackInterface(MessagingInterface):
         except Exception:
             return False
 
-        welcome_signature = "Hi, I'm Ninja \u2014 your"
         for m in messages:
             if self.is_human_message(m) or welcome_signature in (m.get("text") or ""):
                 agent_data["welcomed"] = True

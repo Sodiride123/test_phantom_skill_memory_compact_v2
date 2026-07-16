@@ -332,14 +332,12 @@ def human_move_to(page, x: float, y: float, steps: int = 0):
         steps: Number of intermediate points (0 = auto based on distance).
     """
     # Get current mouse position (default to random starting point if unknown)
-    current = page.evaluate(
-        """() => {
+    current = page.evaluate("""() => {
         return JSON.stringify({
             x: window._ninjaMouseX || Math.random() * 400 + 100,
             y: window._ninjaMouseY || Math.random() * 300 + 100,
         });
-    }"""
-    )
+    }""")
     import json
 
     pos = json.loads(current)

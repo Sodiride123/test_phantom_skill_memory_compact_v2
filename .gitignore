@@ -9,10 +9,12 @@ settings.json
 .env*
 
 # Browser data
-phantom/browser_data/
-phantom/sessions/_tmp_cookies.db
-ninja/browser_data/
-ninja/sessions/_tmp_cookies.db
+**/browser_data/
+**/sessions/_tmp_cookies.db
+# Volatile browsr runtime files
+**/Singleton*
+browser/**/*-wal
+browser/**/*-shm
 
 # Python
 __pycache__/

@@ -104,9 +104,9 @@ def extract_last_task_tokens(
                 ):
                     prompt_uuid = entry.get("uuid")
                     model = ""
-                    input_tokens = (
-                        output_tokens
-                    ) = cache_write_tokens = cache_read_tokens = 0
+                    input_tokens = output_tokens = cache_write_tokens = (
+                        cache_read_tokens
+                    ) = 0
                     seen_message_ids = set()
                 elif entry.get("type") == "assistant":
                     msg = entry.get("message", {})

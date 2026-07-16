@@ -86,11 +86,12 @@ def capture(
     if not metadata.get("thread_id"):
         return
 
+    user_id = metadata.get("user_id", "unknown")
     props["ninja_sandbox_id"] = ph_meta.get("sandbox_id", "")
     props["ninja_sandbox_provider"] = metadata.get("sandbox_provider", "unknown")
     props["ninja_thread_id"] = metadata["thread_id"]
-    props["ninja_user_id"] = metadata.get("user_id", "unknown")
-    distinct_id = metadata["thread_id"]
+    props["ninja_user_id"] = user_id
+    distinct_id = user_id
 
     get_posthog_client().capture(
         distinct_id=distinct_id,

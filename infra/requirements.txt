@@ -46,5 +46,8 @@ pytest>=7.0.0
 requests>=2.28.0
 slackify-markdown>=0.2.0
 
+# Retry / exponential backoff for HTTP service clients
+tenacity>=8.2.0
+
 # Local dev: auto-restart monitor on code changes (watchmedo CLI)
 watchdog>=3.0.0

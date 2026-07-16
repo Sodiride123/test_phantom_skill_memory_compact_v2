@@ -59,11 +59,15 @@ def is_customer_key_error(output: str) -> bool:
 # Welcome message
 # ---------------------------------------------------------------------------
 
+
 # Distinctive opening phrase used as an idempotency anchor by the adapter's
 # post_welcome_if_needed() implementation. Must match the first user-visible
 # sentence of build_welcome_message(). Do not change without updating the
 # adapter and the test suite.
-WELCOME_SIGNATURE = "Hi, I'm Ninja \u2014 your"
+def build_welcome_signature(agent) -> str:
+    name = agent.get("name", "Ninja")
+    role = agent.get("role", "Browser Automation Agent")
+    return f"Hi, I'm {name} \u2014 your {role}."
 
 
 def build_welcome_message(agent: dict) -> str:
@@ -72,11 +76,10 @@ def build_welcome_message(agent: dict) -> str:
     The first user-visible sentence MUST contain ``WELCOME_SIGNATURE`` — it
     doubles as an invisible idempotency anchor when reading back channel history.
     """
+    welcome_signature = build_welcome_signature(agent)
     emoji = agent.get("emoji", "\U0001f47b")
-    name = agent.get("name", "Ninja")
-    role = agent.get("role", "Browser Automation Agent")
     return (
-        f"{emoji} **Hi, I'm {name} \u2014 your {role}.**\n"
+        f"{emoji} **{welcome_signature}**\n"
         "Think of me as a virtual employee on your team. Brief me in "
         "any language \u2014 by message, voice note, or file \u2014 and I'll "
         "get the work done. No clicking, no copy-pasting, no API keys "

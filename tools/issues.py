@@ -107,7 +107,7 @@ def block_issue(number: int, comment: str) -> None:
         check=False,
     )
     _gh(["issue", "edit", str(number), "--add-label", BLOCKED_LABEL])
-    comment_issue(number, f"\U0001F6A7 BLOCKED: {comment}")
+    comment_issue(number, f"\U0001f6a7 BLOCKED: {comment}")
 
 
 def unblock_issue(number: int, comment: str | None = None) -> None:

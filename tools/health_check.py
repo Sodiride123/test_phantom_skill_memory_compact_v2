@@ -126,9 +126,11 @@ def check_github() -> dict:
                 "status": "error",
                 "message": "GitHub not authenticated",
                 "token_available": has_token,
-                "fix": "cat /dev/shm/mcp-token | python -c \"import sys,json; print(json.loads(sys.stdin.read().split('=',1)[1])['access_token'])\" | gh auth login --with-token"
-                if has_token
-                else "No token found at /dev/shm/mcp-token",
+                "fix": (
+                    "cat /dev/shm/mcp-token | python -c \"import sys,json; print(json.loads(sys.stdin.read().split('=',1)[1])['access_token'])\" | gh auth login --with-token"
+                    if has_token
+                    else "No token found at /dev/shm/mcp-token"
+                ),
             }
     except subprocess.TimeoutExpired:
         return {"status": "error", "message": "GitHub auth check timed out"}
