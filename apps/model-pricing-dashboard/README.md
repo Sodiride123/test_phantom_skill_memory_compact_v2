@@ -37,6 +37,15 @@ python -m http.server 8000
 
 Then open <http://localhost:8000> in a browser.
 
+To regenerate the screenshot (or just sanity-check the rendered data-health
+line) in one step — serves on an ephemeral port, renders in the browser skill,
+writes `screenshot.png`, and shuts the server down cleanly:
+
+```bash
+python preview.py            # -> screenshot.png + prints #data-health
+python preview.py --no-shot  # just print #data-health, no screenshot
+```
+
 (Chart.js loads from a CDN, so keep an internet connection for the charts. The
 data itself is served from the local `data/models.json`.)
 
@@ -216,4 +225,5 @@ No API keys or paid logins were used — **public sources only**.
 | `test_scrape_official.py` | Regression tests for the official-page parsers (`pytest` or standalone; no network) |
 | `data/models.json` | Normalized dataset (prices + capabilities + provenance) |
 | `data/price_history.json` | Append-only per-run price snapshots (last 12) for run-over-run drift |
+| `preview.py` | Serve + screenshot the dashboard in one step (regenerates `screenshot.png`) |
 | `screenshot.png` | Screenshot of the running dashboard |
