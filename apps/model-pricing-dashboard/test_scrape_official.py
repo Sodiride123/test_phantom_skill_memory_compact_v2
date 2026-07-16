@@ -42,19 +42,37 @@ def test_anthropic_main_table_only():
 def test_xai_standard_tier():
     text = "grok-4.5\t500k\t$2.00\t$0.50\t$6.00\t$4.00\t$1.00\t$12.00"
     rows = so.parse_xai(text)
-    assert rows["grok45"] == {"name": "grok-4.5", "input": 2.0, "cached": 0.5, "output": 6.0}
+    assert rows["grok45"] == {
+        "name": "grok-4.5", "input": 2.0, "cached": 0.5, "output": 6.0, "context": 500000,
+    }
 
 
 def test_deepseek_transposed_with_rowspan_label():
     text = "\n".join([
         "MODEL\tdeepseek-v4-flash(1)\tdeepseek-v4-pro",
+        "CONTEXT LENGTH\t1M",
         "PRICING\t1M INPUT TOKENS (CACHE HIT)\t$0.0028\t$0.003625",
         "1M INPUT TOKENS (CACHE MISS)\t$0.14\t$0.435",
         "1M OUTPUT TOKENS\t$0.28\t$0.87",
     ])
     rows = so.parse_deepseek(text)
-    assert rows["deepseekv4flash"] == {"name": "deepseek-v4-flash", "input": 0.14, "cached": 0.0028, "output": 0.28}
-    assert rows["deepseekv4pro"] == {"name": "deepseek-v4-pro", "input": 0.435, "cached": 0.003625, "output": 0.87}
+    assert rows["deepseekv4flash"] == {
+        "name": "deepseek-v4-flash", "input": 0.14, "cached": 0.0028, "output": 0.28, "context": 1000000,
+    }
+    assert rows["deepseekv4pro"] == {
+        "name": "deepseek-v4-pro", "input": 0.435, "cached": 0.003625, "output": 0.87, "context": 1000000,
+    }
+
+
+def test_context_helper():
+    assert so._context("1M") == 1000000
+    assert so._context("256k") == 256000
+    assert so._context("500k") == 500000
+    assert so._context("128000") == 128000
+    assert so._context("1,000,000") == 1000000
+    assert so._context("2M") == 2000000
+    assert so._context("") is None
+    assert so._context("n/a") is None
 
 
 def test_google_section_first_dollar():

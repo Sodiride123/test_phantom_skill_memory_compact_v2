@@ -1,6 +1,6 @@
 {
-  "last_collected": "2026-07-16T16:19:32Z",
-  "generated_at": "2026-07-16T16:19:32.835015+00:00",
+  "last_collected": "2026-07-16T16:40:10Z",
+  "generated_at": "2026-07-16T16:40:10.449243+00:00",
   "currency": "USD",
   "price_unit": "per 1,000,000 tokens",
   "provider_count": 6,
@@ -777,7 +777,7 @@
       "cached_price": 0.5,
       "output_price": 6.0,
       "price_unit": "USD per 1M tokens",
-      "context_window": 256000,
+      "context_window": 500000,
       "modalities": [
         "text",
         "vision"
@@ -791,7 +791,7 @@
         "input_price": "official",
         "cached_price": "official",
         "output_price": "official",
-        "context_window": "fallback",
+        "context_window": "official",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
@@ -1141,7 +1141,7 @@
       "cached_price": 0.0028,
       "output_price": 0.28,
       "price_unit": "USD per 1M tokens",
-      "context_window": 128000,
+      "context_window": 1000000,
       "modalities": [
         "text"
       ],
@@ -1154,7 +1154,7 @@
         "input_price": "official",
         "cached_price": "official",
         "output_price": "official",
-        "context_window": "fallback",
+        "context_window": "official",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
@@ -1170,7 +1170,7 @@
       "cached_price": 0.003625,
       "output_price": 0.87,
       "price_unit": "USD per 1M tokens",
-      "context_window": 128000,
+      "context_window": 1000000,
       "modalities": [
         "text"
       ],
@@ -1184,7 +1184,7 @@
         "input_price": "official",
         "cached_price": "official",
         "output_price": "official",
-        "context_window": "fallback",
+        "context_window": "official",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
@@ -1263,6 +1263,23 @@
       "xAI/Grok 4.5",
       "DeepSeek/DeepSeek V4 Flash",
       "DeepSeek/DeepSeek V4 Pro"
+    ],
+    "context_upgrades": [
+      {
+        "model": "xAI/Grok 4.5",
+        "from": 256000,
+        "to": 500000
+      },
+      {
+        "model": "DeepSeek/DeepSeek V4 Flash",
+        "from": 128000,
+        "to": 1000000
+      },
+      {
+        "model": "DeepSeek/DeepSeek V4 Pro",
+        "from": 128000,
+        "to": 1000000
+      }
     ],
     "not_scraped": {
       "Mistral": "mistral.ai/pricing lists subscription plans only, not API token prices \u2014 kept on aggregator/fallback"

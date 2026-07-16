@@ -55,11 +55,26 @@ OFFICIAL_PAGES = {
 }
 
 MONEY = re.compile(r"\$\s*([\d,]+(?:\.\d+)?)")
+# Context length like "1M", "256k", "2M", "128000", "1,000,000".
+CTX = re.compile(r"^([\d,]+(?:\.\d+)?)\s*([mk])?$", re.I)
 
 
 def norm(name: str) -> str:
     """Lowercase, strip everything but [a-z0-9] for robust name matching."""
     return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
+def _context(cell: str):
+    """Parse a context-length cell into an int token count. '1M' -> 1000000,
+    '256k' -> 256000, '128000' -> 128000, '1,000,000' -> 1000000. Else None."""
+    cell = (cell or "").strip()
+    m = CTX.match(cell)
+    if not m:
+        return None
+    num = float(m.group(1).replace(",", ""))
+    unit = (m.group(2) or "").lower()
+    mult = {"m": 1_000_000, "k": 1_000, "": 1}[unit]
+    return int(num * mult)
 
 
 def _money(cell: str):
@@ -143,7 +158,8 @@ def parse_anthropic(text: str):
 
 def parse_xai(text: str):
     """Rows: 'grok-x<tab>context<tab>$in<tab>$cache<tab>$out<tab>…higher tier'.
-    Take standard tier: input, cached, output (cells 2,3,4)."""
+    Take standard tier: input, cached, output (cells 2,3,4). The Context column
+    (cell 1, e.g. '256k'/'1M') gives the context window."""
     rows = {}
     for line in text.splitlines():
         cells = [c.strip() for c in line.split("\t")]
@@ -153,15 +169,18 @@ def parse_xai(text: str):
                 "input": _money(cells[2]),
                 "cached": _money(cells[3]),
                 "output": _money(cells[4]),
+                "context": _context(cells[1]),
             }
     return rows
 
 
 def parse_deepseek(text: str):
     """Transposed table: a 'MODEL\\t<name1>\\t<name2>' header, then rows
-    'CACHE HIT', 'CACHE MISS' (=input), 'OUTPUT TOKENS' (=output)."""
+    'CACHE HIT', 'CACHE MISS' (=input), 'OUTPUT TOKENS' (=output). A
+    'CONTEXT LENGTH\\t<ctx>' row gives the (shared) context window."""
     lines = text.splitlines()
     names, hit, miss, out = [], [], [], []
+    ctx = None
     for line in lines:
         cells = [c.strip() for c in line.split("\t")]
         head = cells[0].upper()
@@ -171,6 +190,8 @@ def parse_deepseek(text: str):
             return [float(v.replace(",", "")) for v in MONEY.findall(line)][-len(names):] if names else []
         if head == "MODEL" and len(cells) >= 3:
             names = [re.sub(r"\(.*?\)", "", c).strip() for c in cells[1:]]
+        elif "CONTEXT LENGTH" in line.upper() and len(cells) >= 2:
+            ctx = _context(cells[1])
         elif "CACHE HIT" in line.upper():
             hit = tail(cells)
         elif "CACHE MISS" in line.upper():
@@ -186,6 +207,7 @@ def parse_deepseek(text: str):
             "input": miss[idx] if idx < len(miss) else None,
             "cached": hit[idx] if idx < len(hit) else None,
             "output": out[idx] if idx < len(out) else None,
+            "context": ctx,
         }
     return rows
 
@@ -280,6 +302,7 @@ def overlay(dry_run=False):
     per_provider = {}
     confirmed_names = []
     total_matched = 0
+    context_upgrades = []  # (model, old_ctx, new_ctx)
 
     for m in dataset["models"]:
         prov = m["provider"]
@@ -299,6 +322,15 @@ def overlay(dry_run=False):
             total_matched += 1
             confirmed_names.append(f"{prov}/{m['name']}")
 
+        # Capability upgrade — context window, where the official page states it.
+        if hit and hit.get("context"):
+            old = m.get("context_window")
+            m["context_window"] = hit["context"]
+            m["provenance"]["context_window"] = bd.OFFICIAL
+            m.setdefault("official_source", OFFICIAL_PAGES[prov])
+            if old != hit["context"]:
+                context_upgrades.append((f"{prov}/{m['name']}", old, hit["context"]))
+
     # Refresh top-level provenance metadata (adds the 'official' tier).
     fresh = bd.assemble(dataset["models"])
     dataset["sources"] = fresh["sources"]
@@ -313,6 +345,9 @@ def overlay(dry_run=False):
         "matched": total_matched,
         "by_provider": {p: s for p, s in per_provider.items()},
         "confirmed": confirmed_names,
+        "context_upgrades": [
+            {"model": n, "from": o, "to": t} for n, o, t in context_upgrades
+        ],
         "not_scraped": {
             "Mistral": "mistral.ai/pricing lists subscription plans only, "
                        "not API token prices — kept on aggregator/fallback",
@@ -323,6 +358,10 @@ def overlay(dry_run=False):
     for prov, s in per_provider.items():
         print(f"  {prov:10s} {s['matched']}/{s['catalog']} models -> official")
     print("  Mistral    0 (official page has no API token prices)")
+    if context_upgrades:
+        print(f"\nContext windows upgraded to official ({len(context_upgrades)}):")
+        for n, o, t in context_upgrades:
+            print(f"  {n}: {o} -> {t}")
 
     if dry_run:
         print("\n--dry-run: not writing data/models.json")

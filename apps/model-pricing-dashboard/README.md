@@ -83,9 +83,12 @@ python build_dataset.py
 ```
 
 **Automated weekly refresh** — a cron job (`weekly-pricing-refresh`, schedule
-`0 9 * * 1` — Mondays 09:00 local) runs `scrape_pricing.py` and posts a short
-summary to Slack, so the snapshot and `last_collected` timestamp stay current
-without manual intervention. Manage it with `python tools/cron.py list|show|disable weekly-pricing-refresh`.
+`0 9 * * 1` — Mondays 09:00 local) runs **both** scrapers in order —
+`scrape_pricing.py` (aggregator baseline) then `scrape_official.py` (official
+overlay) — and posts a short summary to Slack reporting the official matched
+count plus the aggregator matched/stale counts and new `last_collected` date, so
+the snapshot stays current without manual intervention. Manage it with
+`python tools/cron.py list|show|disable weekly-pricing-refresh`.
 
 ## Data sources & provenance
 
@@ -122,9 +125,27 @@ and cross-checked against public web-search results. Pages used:
 | Mistral   | `aipricing.guru/mistral-pricing` |
 | DeepSeek  | `aipricing.guru/deepseek-pricing` |
 
+### Capabilities — `official` (from the provider's own page)
+
+Where a provider's own pricing page reliably states a model's **context window**,
+`scrape_official.py` upgrades that field too (strict exact-name match) and flags
+it `official`. As of the last run this corrected 3 context windows:
+
+| Model | Was (fallback) | Now (official) |
+|-------|----------------|----------------|
+| DeepSeek V4 Flash | 128K | **1M** |
+| DeepSeek V4 Pro   | 128K | **1M** |
+| Grok 4.5          | 256K | **500K** |
+
+See `official_refresh.context_upgrades` in `data/models.json`. Modalities are
+**not** upgraded — the pricing pages list per-token modality columns only for a
+few realtime/image models, not the main text models, so mapping them per catalog
+row was not reliable; they stay `fallback`.
+
 ### Capabilities — `fallback` (public docs)
 
-Context window, modalities, release date and suitability tags are **not** listed
+The remaining capability fields — context window (where the official page does
+not state it), modalities, release date and suitability tags — are **not** listed
 in the aggregator price tables, so they were filled from **public provider docs
 and model cards** as reasonable fallback values. These are flagged `fallback` in
 the dataset and with an amber badge in the UI.
