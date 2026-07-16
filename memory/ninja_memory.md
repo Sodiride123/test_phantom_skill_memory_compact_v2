@@ -18,4 +18,5 @@
 
 ## Pending Items
 <!-- Items to follow up on -->
-- NONE. Dashboard spec (#75/#77) + follow-ups #78 (scraper), #79 (provenance UI), #80 (parser tests), #81 (export), #82 (weekly cron) all shipped. Issue queue intentionally EMPTY — this is the correct terminal state until the user gives new direction. Do NOT file speculative padding issues.
+- Issue #83 (2026-07-16): NEW cloud GPU pricing & specs comparison dashboard (separate from the AI-model-pricing one). Handed to orchestrator. Providers: AWS, GCP, Azure, Lambda, CoreWeave, RunPod, Vast.ai. Public-source only, USD-normalize, flag published-vs-estimated, no fabrication, keep app functional if a source fails. Full README + local-run verification + screenshot. Report back to Slack thread 1784192621.023839.
+- DONE earlier: AI model pricing dashboard (#75/#77) + follow-ups #78-#82 all shipped (apps/model-pricing-dashboard/). Do NOT re-file those.
