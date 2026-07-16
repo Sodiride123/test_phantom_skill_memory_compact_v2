@@ -1,0 +1,13 @@
+[
+  {
+    "created_at": 1784190982.11643,
+    "enabled": true,
+    "id": "weekly-pricing-refresh",
+    "last_run_at": null,
+    "next_run_at": 1784538000.0,
+    "prompt": "Weekly AI model pricing refresh. Run: python apps/model-pricing-dashboard/scrape_pricing.py (from the repo root /workspace/ninja). It scrapes the public aggregator aipricing.guru via Tavily and regenerates apps/model-pricing-dashboard/data/models.json with a fresh last_collected timestamp; the repo auto-commits the change. Then post a SHORT one-line summary to Slack (matched vs stale model counts + the new last_collected date). If the scraper reports 0 rows or errors, say so instead \u2014 do not overwrite data on failure (the script already aborts on 0 rows). Public sources only; no API keys.",
+    "run_count": 0,
+    "schedule": "0 9 * * 1",
+    "thread_ts": null
+  }
+]

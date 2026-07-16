@@ -14,6 +14,8 @@
 - aipricing.guru table gotchas: column layout VARIES per provider (Mistral/DeepSeek have no 'Tier' column -> 5 cols; others 6) — parse by header name, not fixed index. Pages can have multiple '| Model' tables — collect all + dedupe. Occasionally 502s — retry. xAI page (as of 2026-07-16) only tabulates one model (Grok 4.5); others appear only in prose, so they fall back to stale last-known prices.
 - Browser skill: to run browser_interface from an arbitrary cwd, set PYTHONPATH=/workspace/ninja/browser (modules aren't on the default path). Exit code 144 after pkill of a background http.server is harmless (SIGTERM).
 
+- 2026-07-16: Completed #82 — scheduled weekly pricing refresh (commit 304955f). Created durable cron `weekly-pricing-refresh` (schedule `0 9 * * 1` = Mondays 09:00 local, next run 2026-07-20) via tools/cron.py that runs scrape_pricing.py + posts a Slack summary. Confirmed cron durability (fires agent prompts via monitor batch path, restart-safe .phantom_crons.json) + dry-run 32/39 matched. Documented "Automated weekly refresh" section in README. Dashboard spec + all 5 follow-ups (#78-#82) shipped.
+
 ## Pending Items
 <!-- Items to follow up on -->
-- #82: schedule a periodic (weekly) run of scrape_pricing.py so the dashboard snapshot stays current. Confirm scheduler durability across cycles first; else document manual cadence in README. Next cycle candidate.
+- NONE. Dashboard spec (#75/#77) + follow-ups #78 (scraper), #79 (provenance UI), #80 (parser tests), #81 (export), #82 (weekly cron) all shipped. Issue queue intentionally EMPTY — this is the correct terminal state until the user gives new direction. Do NOT file speculative padding issues.
