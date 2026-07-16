@@ -33,10 +33,28 @@ from pathlib import Path
 LAST_COLLECTED = "2026-07-16T00:00:00Z"
 
 # Provenance tags per field group.
+OFFICIAL = "official"   # scraped from the provider's OWN pricing page (rendered)
 AGG = "aggregator"      # scraped from aipricing.guru pricing tables
 FB = "fallback"         # public provider docs / model cards
 
 SOURCES = {
+    "official": {
+        "name": "official provider pricing pages (rendered via stealth browser)",
+        "urls": [
+            "https://developers.openai.com/api/docs/pricing",
+            "https://docs.claude.com/en/docs/about-claude/pricing",
+            "https://ai.google.dev/gemini-api/docs/pricing",
+            "https://docs.x.ai/developers/pricing",
+            "https://api-docs.deepseek.com/quick_start/pricing",
+        ],
+        "note": "Token prices read directly from each provider's own pricing "
+                "page after JS rendering in the browser skill (scrape_official.py). "
+                "Confirmed values are flagged provenance='official' and take "
+                "precedence over the aggregator. Mistral's official page "
+                "(mistral.ai/pricing) only lists subscription plans, not API "
+                "token prices, so Mistral rows stay on the aggregator/fallback.",
+        "scraped_via": "browser skill (Playwright, rendered DOM)",
+    },
     "aggregator": {
         "name": "aipricing.guru",
         "urls": [
@@ -219,6 +237,8 @@ def assemble(models, *, last_collected=LAST_COLLECTED, refresh=None):
         "model_count": len(models),
         "sources": SOURCES,
         "provenance_legend": {
+            "official": "Read from the provider's OWN pricing page, rendered in "
+                        "the browser skill (highest confidence).",
             "aggregator": "Scraped from public aggregator aipricing.guru "
                           "(cross-checked with web search).",
             "fallback": "Public provider docs / model cards, or a last-known "

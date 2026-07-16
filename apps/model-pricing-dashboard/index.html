@@ -20,7 +20,8 @@
       <span id="counts"></span>
       &nbsp;·&nbsp;
       <span class="prov-note">
-        Prices <b>USD / 1M tokens</b>. Pricing = <span class="badge agg">aggregator</span>,
+        Prices <b>USD / 1M tokens</b>. Pricing = <span class="badge official">official</span>
+        (provider's own page) or <span class="badge agg">aggregator</span>;
         capability fields = <span class="badge fb">fallback</span> (public docs).
       </span>
     </p>
@@ -94,7 +95,8 @@
     </div>
     <p class="prov-legend">
       Cell provenance:
-      <span class="pdot pdot-agg"></span> scraped (aggregator)
+      <span class="pdot pdot-official"></span> official (provider page)
+      &nbsp; <span class="pdot pdot-agg"></span> scraped (aggregator)
       &nbsp; <span class="pdot pdot-fb"></span> fallback (public docs)
       &nbsp; <span class="pdot pdot-stale"></span> stale (last-known price kept)
     </p>
@@ -128,10 +130,11 @@
 
   <footer>
     <p>
-      Data sources: pricing scraped from public aggregator
-      <b>aipricing.guru</b>; capability fields from public provider docs
-      (flagged <i>fallback</i>). Official provider pricing pages are JS-rendered
-      and could not be reliably scraped — see README.
+      Data sources: token prices read from each provider's <b>own pricing page</b>
+      (rendered in the browser skill, flagged <i>official</i>) where available,
+      else the public aggregator <b>aipricing.guru</b> (<i>aggregator</i>);
+      capability fields from public provider docs (<i>fallback</i>). Mistral's
+      official page lists subscription plans only — see README.
     </p>
   </footer>
 

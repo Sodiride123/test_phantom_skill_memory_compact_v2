@@ -37,8 +37,26 @@ data itself is served from the local `data/models.json`.)
 
 ## Refresh the data
 
-**Live refresh (recommended)** — scrape fresh prices from the public aggregator
-and regenerate `data/models.json` with a new `last_collected` timestamp:
+**Best fidelity — official pages via the browser skill (`scrape_official.py`)**
+
+```bash
+python scrape_pricing.py            # 1. aggregator baseline (all providers)
+python scrape_official.py           # 2. overlay OFFICIAL prices where available
+python scrape_official.py --dry-run # scrape + report, don't write
+```
+
+`scrape_official.py` drives the persistent stealth browser to render each
+provider's **own** pricing page, parses the live token-price tables from the
+rendered DOM, and overlays them onto `data/models.json`. Confirmed values are
+flagged provenance `official` (blue badge) and take precedence over the
+aggregator. Matching is **strict** (exact normalized model name) so a model
+variant is never mis-priced — a model not found on the official page keeps its
+existing aggregator/fallback price untouched. As of the last run it confirmed
+**18 models across 5 providers** (OpenAI 9, Google 4, Anthropic 2, DeepSeek 2,
+xAI 1). See `official_refresh` in `data/models.json` for the per-provider tally.
+
+**Aggregator refresh** — scrape prices from the public aggregator and regenerate
+`data/models.json` with a new `last_collected` timestamp:
 
 ```bash
 python scrape_pricing.py            # scrape + write data/models.json
@@ -74,6 +92,20 @@ without manual intervention. Manage it with `python tools/cron.py list|show|disa
 Every model row carries a `provenance` map so you can see which fields are fresh
 scrapes vs. reasonable fallbacks.
 
+### Pricing — `official` (scraped from the provider's own page)
+
+Token prices for 18 models were read directly from each provider's **own**
+pricing page, rendered in the browser skill (`scrape_official.py`). These are the
+highest-confidence values and carry a blue badge in the UI:
+
+| Provider  | Official page |
+|-----------|---------------|
+| OpenAI    | `developers.openai.com/api/docs/pricing` |
+| Anthropic | `docs.claude.com/en/docs/about-claude/pricing` |
+| Google    | `ai.google.dev/gemini-api/docs/pricing` |
+| xAI       | `docs.x.ai/developers/pricing` |
+| DeepSeek  | `api-docs.deepseek.com/quick_start/pricing` |
+
 ### Pricing — `aggregator` (scraped)
 
 Input / cached / output token prices were scraped from the public aggregator
@@ -99,22 +131,21 @@ the dataset and with an amber badge in the UI.
 
 ### Sources that could NOT be reliably scraped
 
-The **official provider pricing pages** are JavaScript-rendered single-page apps.
-Tavily `extract()` (even with `extract_depth="advanced"`) returned marketing/nav
-copy rather than the live token-price tables, so they could not be reliably
-scraped for values:
+The official provider pricing pages are JavaScript-rendered single-page apps, so
+plain-HTTP `Tavily extract()` returns marketing/nav copy rather than the live
+token-price tables. **Rendering them in the browser skill solves this** for five
+of the six providers (see the `official` table above). The remaining gap:
 
-- `openai.com/api/pricing`
-- `anthropic.com/pricing`, `claude.com/pricing`
-- `ai.google.dev/pricing`
-- `x.ai/api`
-- `mistral.ai/pricing`
-- `api-docs.deepseek.com/quick_start/pricing`
+- **Mistral** — `mistral.ai/pricing` lists only consumer **subscription plans**
+  ($14.99/$24.99/mo etc.), not API token prices, even after rendering. Mistral
+  rows therefore stay on the aggregator/fallback. `docs.mistral.ai` model pages
+  render an API-loaded table that did not expose per-token prices in text.
+- A few individual models (e.g. some older OpenAI GPT-4-class models, `Grok 4.20`
+  variants, `Gemini 3 Pro`, `Claude Sonnet 5`) are not listed under an exact
+  matching name on the current official page, so they keep their aggregator/
+  fallback price rather than risk a wrong-variant match.
 
-Per the task requirement, this limitation is documented here and we fell back to
-the reputable aggregator above (which mirrors the same public prices in
-server-rendered HTML). No API keys or paid logins were used — **public sources
-only**.
+No API keys or paid logins were used — **public sources only**.
 
 ## Files
 
@@ -124,7 +155,9 @@ only**.
 | `styles.css` | Styling (dark theme) |
 | `app.js` | Table, filters, charts, best-value logic |
 | `build_dataset.py` | Model catalog + normalizer — generates `data/models.json` |
-| `scrape_pricing.py` | Live pricing refresh — scrapes aggregator, regenerates dataset |
-| `test_scrape_pricing.py` | Regression tests for the table parser (`pytest` or standalone; no network) |
+| `scrape_pricing.py` | Aggregator pricing refresh — scrapes aipricing.guru, regenerates dataset |
+| `scrape_official.py` | Official-page refresh — renders provider pages in the browser skill, overlays `official` prices |
+| `test_scrape_pricing.py` | Regression tests for the aggregator table parser (`pytest` or standalone; no network) |
+| `test_scrape_official.py` | Regression tests for the official-page parsers (`pytest` or standalone; no network) |
 | `data/models.json` | Normalized dataset (prices + capabilities + provenance) |
 | `screenshot.png` | Screenshot of the running dashboard |

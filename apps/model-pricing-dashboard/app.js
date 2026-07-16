@@ -132,12 +132,16 @@ function comparator(a, b) {
 
 // Per-cell provenance marker. Price cells that couldn't be re-scraped are
 // flagged "stale" (last-known value kept); otherwise a field's provenance is
-// aggregator (scraped) or fallback (public docs).
+// official (provider's own page), aggregator (scraped), or fallback (public docs).
 function provMark(field, m) {
   const priceField =
     field === "input_price" || field === "cached_price" || field === "output_price";
   if (priceField && m.price_stale) {
     return { kind: "stale", title: "Stale — last-known price kept (live scrape didn't match)" };
+  }
+  if (m.provenance[field] === "official") {
+    const src = m.official_source ? " (" + m.official_source + ")" : "";
+    return { kind: "official", title: "Confirmed on the provider's own pricing page" + src };
   }
   if (m.provenance[field] === "aggregator") {
     return { kind: "agg", title: "Scraped from public aggregator (aipricing.guru)" };

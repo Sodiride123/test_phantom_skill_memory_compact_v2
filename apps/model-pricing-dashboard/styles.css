@@ -6,6 +6,7 @@
   --text: #e6ebf5;
   --muted: #94a2bd;
   --accent: #5b8cff;
+  --official: #0a84ff;
   --agg: #34c759;
   --fb: #ffb020;
   --openai: #10a37f;
@@ -51,6 +52,7 @@ h2 { margin: 0 0 14px; font-size: 18px; }
   font-weight: 600;
   color: #0b0f18;
 }
+.badge.official { background: var(--official); }
 .badge.agg { background: var(--agg); }
 .badge.fb { background: var(--fb); }
 
@@ -154,6 +156,7 @@ tbody tr:hover { background: var(--panel); }
   vertical-align: middle;
   opacity: 0.9;
 }
+.pdot-official { background: var(--official); }
 .pdot-agg { background: var(--agg); }
 .pdot-fb { background: var(--fb); }
 /* stale = small amber triangle rather than a dot */
