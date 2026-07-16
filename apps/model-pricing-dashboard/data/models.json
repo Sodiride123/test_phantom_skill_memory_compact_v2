@@ -1,6 +1,6 @@
 {
-  "last_collected": "2026-07-16T16:52:21Z",
-  "generated_at": "2026-07-16T16:52:21.843858+00:00",
+  "last_collected": "2026-07-16T17:01:21Z",
+  "generated_at": "2026-07-16T17:01:21.455339+00:00",
   "currency": "USD",
   "price_unit": "per 1,000,000 tokens",
   "provider_count": 6,
@@ -1271,38 +1271,9 @@
       "DeepSeek/DeepSeek V4 Flash",
       "DeepSeek/DeepSeek V4 Pro"
     ],
-    "context_upgrades": [
-      {
-        "model": "OpenAI/GPT-5.6 Luna",
-        "from": 400000,
-        "to": 1050000
-      },
-      {
-        "model": "OpenAI/GPT-5.6 Terra",
-        "from": 400000,
-        "to": 1050000
-      },
-      {
-        "model": "OpenAI/GPT-5.6 Sol",
-        "from": 400000,
-        "to": 1050000
-      },
-      {
-        "model": "Anthropic/Claude Opus 4.8",
-        "from": 200000,
-        "to": 1000000
-      },
-      {
-        "model": "Google/Gemini 3.5 Flash",
-        "from": 1000000,
-        "to": 1048576
-      },
-      {
-        "model": "Google/Gemini 3 Pro",
-        "from": 1000000,
-        "to": 1048576
-      }
-    ],
+    "context_upgrades": [],
+    "drift_threshold_pct": 25.0,
+    "drift": [],
     "not_scraped": {
       "Mistral": "mistral.ai/pricing lists subscription plans only, not API token prices \u2014 kept on aggregator/fallback"
     }

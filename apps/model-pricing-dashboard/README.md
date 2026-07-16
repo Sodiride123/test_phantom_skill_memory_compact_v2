@@ -55,6 +55,12 @@ existing aggregator/fallback price untouched. As of the last run it confirmed
 **18 models across 5 providers** (OpenAI 9, Google 4, Anthropic 2, DeepSeek 2,
 xAI 1). See `official_refresh` in `data/models.json` for the per-provider tally.
 
+**Price-drift sanity check** — before overwriting a price, `scrape_official.py`
+compares the incoming official value to the previous (aggregator/fallback) one
+and flags any move larger than **25%** (`official_refresh.drift` in the JSON,
+plus a `Price drift >25% vs previous: N` line on stdout). It does **not** block
+the write — it just surfaces likely parser/layout regressions for review.
+
 **Aggregator refresh** — scrape prices from the public aggregator and regenerate
 `data/models.json` with a new `last_collected` timestamp:
 
