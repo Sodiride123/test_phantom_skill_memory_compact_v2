@@ -86,6 +86,23 @@ def _money(cell: str):
     return float(m.group(1).replace(",", "")) if m else None
 
 
+# Flag when an incoming official price differs from the previous (aggregator/
+# fallback) price by more than this fraction — a cheap guard against a parser
+# regression or a page-layout change silently producing a wrong number.
+DRIFT_THRESHOLD = 0.25  # 25%
+
+
+def _drift_pct(old, new):
+    """Relative change |new-old|/|old| as a fraction, or None when it can't be
+    computed meaningfully (either value missing, or old is 0 — no ratio). A 0->0
+    change is 0.0; identical values are 0.0."""
+    if old is None or new is None:
+        return None
+    if old == 0:
+        return 0.0 if new == 0 else None
+    return abs(new - old) / abs(old)
+
+
 # ---------------------------------------------------------------------------
 # Per-provider parsers. Each takes the rendered page text and returns
 # {normalized_name: {"name": display, "input": float|None,
@@ -463,6 +480,7 @@ def overlay(dry_run=False):
     confirmed_names = []
     total_matched = 0
     context_upgrades = []  # (model, old_ctx, new_ctx)
+    drift = []  # official price vs previous price differs by > DRIFT_THRESHOLD
 
     for m in dataset["models"]:
         prov = m["provider"]
@@ -471,6 +489,18 @@ def overlay(dry_run=False):
         stats = per_provider.setdefault(prov, {"matched": 0, "catalog": 0})
         stats["catalog"] += 1
         if hit and hit.get("input") is not None:
+            # Sanity check BEFORE overwriting: flag any big move vs the previous
+            # (aggregator/fallback) price — likely a parser/layout regression.
+            for f, key in (("input_price", "input"), ("cached_price", "cached"),
+                           ("output_price", "output")):
+                old, new = m.get(f), hit.get(key)
+                pct = _drift_pct(old, new)
+                if pct is not None and pct > DRIFT_THRESHOLD:
+                    drift.append({
+                        "model": f"{prov}/{m['name']}", "field": f,
+                        "from": old, "to": new, "pct": round(pct * 100, 1),
+                        "prev_provenance": m["provenance"].get(f),
+                    })
             m["input_price"] = hit.get("input")
             m["cached_price"] = hit.get("cached")
             m["output_price"] = hit.get("output")
@@ -510,6 +540,8 @@ def overlay(dry_run=False):
         "context_upgrades": [
             {"model": n, "from": o, "to": t} for n, o, t in context_upgrades
         ],
+        "drift_threshold_pct": DRIFT_THRESHOLD * 100,
+        "drift": drift,
         "not_scraped": {
             "Mistral": "mistral.ai/pricing lists subscription plans only, "
                        "not API token prices — kept on aggregator/fallback",
@@ -524,6 +556,12 @@ def overlay(dry_run=False):
         print(f"\nContext windows upgraded to official ({len(context_upgrades)}):")
         for n, o, t in context_upgrades:
             print(f"  {n}: {o} -> {t}")
+    print(f"\nPrice drift >{int(DRIFT_THRESHOLD * 100)}% vs previous: {len(drift)}")
+    if drift:
+        print("  ⚠ review these — a large move may be a parser/layout regression:")
+        for d in drift:
+            print(f"    {d['model']} {d['field']}: {d['from']} -> {d['to']} "
+                  f"({d['pct']}%, was {d['prev_provenance']})")
 
     if dry_run:
         print("\n--dry-run: not writing data/models.json")

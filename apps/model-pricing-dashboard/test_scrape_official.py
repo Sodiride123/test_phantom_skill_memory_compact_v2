@@ -138,6 +138,27 @@ def test_money_helper():
     assert so._money("$1,250") == 1250.0
 
 
+def test_drift_pct():
+    # identical / small move
+    assert so._drift_pct(10.0, 10.0) == 0.0
+    assert abs(so._drift_pct(10.0, 11.0) - 0.10) < 1e-9      # +10%
+    # big move both directions
+    assert so._drift_pct(10.0, 20.0) == 1.0                  # +100%
+    assert so._drift_pct(10.0, 4.0) == 0.6                   # -60%
+    # not comparable
+    assert so._drift_pct(None, 5.0) is None
+    assert so._drift_pct(5.0, None) is None
+    assert so._drift_pct(0.0, 5.0) is None                   # can't ratio from 0
+    assert so._drift_pct(0.0, 0.0) == 0.0
+
+
+def test_drift_threshold_flags_mismatch():
+    # A mismatched pair (aggregator $10 -> official $2, a 80% drop) must exceed
+    # the 25% guard; a $10 -> $11 move (10%) must not.
+    assert so._drift_pct(10.0, 2.0) > so.DRIFT_THRESHOLD
+    assert so._drift_pct(10.0, 11.0) < so.DRIFT_THRESHOLD
+
+
 def _run_standalone():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     passed = 0
