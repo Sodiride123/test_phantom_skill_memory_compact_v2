@@ -1,6 +1,6 @@
 {
-  "last_collected": "2026-07-16T17:01:21Z",
-  "generated_at": "2026-07-16T17:01:21.455339+00:00",
+  "last_collected": "2026-07-17T02:37:49Z",
+  "generated_at": "2026-07-17T02:37:49.971416+00:00",
   "currency": "USD",
   "price_unit": "per 1,000,000 tokens",
   "provider_count": 6,
@@ -1197,10 +1197,12 @@
   ],
   "refresh": {
     "method": "Tavily extract (extract_depth=advanced) of aipricing.guru",
-    "scraped_rows": 32,
-    "matched": 32,
-    "stale": 7,
+    "scraped_rows": 29,
+    "matched": 30,
+    "stale": 9,
     "stale_models": [
+      "GPT-5.5",
+      "GPT-5.5 Pro",
       "Gemini 3 Pro",
       "Grok 4.1 Fast",
       "Grok 3 Mini",
@@ -1271,13 +1273,76 @@
       "DeepSeek/DeepSeek V4 Flash",
       "DeepSeek/DeepSeek V4 Pro"
     ],
-    "context_upgrades": [],
+    "context_upgrades": [
+      {
+        "model": "OpenAI/GPT-5.6 Luna",
+        "from": 400000,
+        "to": 1050000
+      },
+      {
+        "model": "OpenAI/GPT-5.6 Terra",
+        "from": 400000,
+        "to": 1050000
+      },
+      {
+        "model": "OpenAI/GPT-5.6 Sol",
+        "from": 400000,
+        "to": 1050000
+      },
+      {
+        "model": "Anthropic/Claude Opus 4.8",
+        "from": 200000,
+        "to": 1000000
+      },
+      {
+        "model": "Google/Gemini 3.5 Flash",
+        "from": 1000000,
+        "to": 1048576
+      },
+      {
+        "model": "Google/Gemini 3 Pro",
+        "from": 1000000,
+        "to": 1048576
+      },
+      {
+        "model": "xAI/Grok 4.5",
+        "from": 256000,
+        "to": 500000
+      },
+      {
+        "model": "DeepSeek/DeepSeek V4 Flash",
+        "from": 128000,
+        "to": 1000000
+      },
+      {
+        "model": "DeepSeek/DeepSeek V4 Pro",
+        "from": 128000,
+        "to": 1000000
+      }
+    ],
     "drift_threshold_pct": 25.0,
-    "drift": [],
+    "drift": [
+      {
+        "model": "OpenAI/GPT-5.4 Pro",
+        "field": "input_price",
+        "from": 2.5,
+        "to": 30.0,
+        "pct": 1100.0,
+        "prev_provenance": "aggregator"
+      },
+      {
+        "model": "OpenAI/GPT-5.4 Pro",
+        "field": "output_price",
+        "from": 15.0,
+        "to": 180.0,
+        "pct": 1100.0,
+        "prev_provenance": "aggregator"
+      }
+    ],
+    "drift_vs_previous_run": [],
+    "history_compared_to": "2026-07-16T17:01:21Z",
     "not_scraped": {
       "Mistral": "mistral.ai/pricing lists subscription plans only, not API token prices \u2014 kept on aggregator/fallback"
-    },
-    "drift_vs_previous_run": [],
-    "history_compared_to": null
+    }
   }
 }
