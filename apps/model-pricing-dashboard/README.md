@@ -21,8 +21,14 @@ xAI, Mistral, and DeepSeek**.
 - **Data-health banner** (under the header) — an at-a-glance tally read straight
   from `data/models.json`: how many models carry `official` / `aggregator` /
   `fallback` prices, how many context windows are `official`, how many rows are
-  price-stale, and the price-drift flag count (green when 0, amber warning when
-  any `official_refresh.drift` entry exceeds the 25% threshold).
+  price-stale, and a **price-regression** count. The regression chip is green at
+  0 and turns amber only when an `official_refresh.drift_vs_previous_run` entry
+  exceeds the 25% threshold — i.e. a stable official price that shifted
+  run-over-run, the real parser/layout-regression signal. Drift of an incoming
+  official value vs the aggregator estimate it *replaced*
+  (`official_refresh.drift`) is expected on most runs and is shown separately as
+  a neutral, informational "official ≠ aggregator" chip only when present — it
+  is never an alarm.
 
 All prices are normalized to **USD per 1,000,000 tokens**.
 

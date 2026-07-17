@@ -69,30 +69,44 @@ function renderDataHealth() {
 
   const orr = DATA.official_refresh || {};
   const driftThresh = orr.drift_threshold_pct;
-  // Two guards: vs the prior (aggregator/fallback) value, and run-over-run vs
-  // the last price_history snapshot. Surface the combined count.
+  // Two distinct signals, treated differently:
+  //  - vsPrevRun: run-over-run official→official move. This is the real
+  //    regression signal (a stable value shifting week-to-week likely means a
+  //    parser/layout break) — drives the amber warning.
+  //  - vsSource: incoming official value vs the aggregator/fallback baseline it
+  //    overwrote. Non-zero almost every run whenever official prices simply
+  //    differ from aggregator estimates, so it is informational, NOT an alarm.
   const vsSource = Array.isArray(orr.drift) ? orr.drift.length : 0;
   const vsPrevRun = Array.isArray(orr.drift_vs_previous_run)
     ? orr.drift_vs_previous_run.length : 0;
-  const driftTotal = vsSource + vsPrevRun;
 
   const chip = (label, cls, title) =>
     `<span class="dh-chip${cls ? " " + cls : ""}"${title ? ` title="${title}"` : ""}>${label}</span>`;
 
-  const driftTip = `${vsSource} vs previous source value · ${vsPrevRun} vs last run`;
   const chips = [
     chip(`<b>Data health</b>`, "dh-title"),
     chip(`prices: <b>${official}</b> official · <b>${aggregator}</b> aggregator · <b>${fallback}</b> fallback`),
     chip(`<b>${ctxOfficial}</b> context windows official`),
     chip(`<b>${stale}</b> stale`, stale > 0 ? "warn" : ""),
     chip(
-      driftTotal > 0
-        ? `⚠ <b>${driftTotal}</b> price-drift flag${driftTotal === 1 ? "" : "s"} (&gt;${driftThresh}%)`
-        : `0 price-drift flags`,
-      driftTotal > 0 ? "warn" : "ok",
-      driftTip,
+      vsPrevRun > 0
+        ? `⚠ <b>${vsPrevRun}</b> price regression${vsPrevRun === 1 ? "" : "s"} (&gt;${driftThresh}% vs last run)`
+        : `0 price regressions`,
+      vsPrevRun > 0 ? "warn" : "ok",
+      `${vsPrevRun} official price${vsPrevRun === 1 ? "" : "s"} moved &gt;${driftThresh}% since the last run`,
     ),
   ];
+  // Informational only — official prices that differ from the aggregator
+  // baseline they replaced. Expected; shown as a neutral chip when present.
+  if (vsSource > 0) {
+    chips.push(
+      chip(
+        `<b>${vsSource}</b> official ≠ aggregator (&gt;${driftThresh}%)`,
+        "",
+        `${vsSource} official price${vsSource === 1 ? "" : "s"} differ &gt;${driftThresh}% from the aggregator estimate they superseded (informational, not a regression)`,
+      ),
+    );
+  }
 
   el.innerHTML = chips.join("");
   el.hidden = false;
