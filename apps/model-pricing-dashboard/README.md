@@ -142,10 +142,14 @@ python build_dataset.py
 **Automated weekly refresh** — a cron job (`weekly-pricing-refresh`, schedule
 `0 9 * * 1` — Mondays 09:00 local) runs **both** scrapers in order —
 `scrape_pricing.py` (aggregator baseline) then `scrape_official.py` (official
-overlay) — and posts a short summary to Slack reporting the official matched
-count plus the aggregator matched/stale counts and new `last_collected` date, so
-the snapshot stays current without manual intervention. Manage it with
-`python tools/cron.py list|show|disable weekly-pricing-refresh`.
+overlay) — then runs `validate_dataset.py --json` as a shipping gate. It posts a
+short summary to Slack reporting the official matched count, the aggregator
+matched/stale counts, the new `last_collected` date, both drift counts, and a
+`validation PASS/FAIL · E errors · W warnings` segment — leading with the
+failure (and listing the errors) when validation does not pass, and calling out
+collision-smell warnings even when it does. So the snapshot stays current, and a
+malformed refresh is surfaced rather than silently shipped. Manage it with
+`python tools/cron.py list|show|update|disable weekly-pricing-refresh`.
 
 ## Data sources & provenance
 

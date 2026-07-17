@@ -17,6 +17,7 @@ Examples:
     python tools/cron.py list
     python tools/cron.py list --json
     python tools/cron.py show daily-summary
+    python tools/cron.py update daily-summary --prompt "New prompt text"
     python tools/cron.py disable daily-summary
     python tools/cron.py enable daily-summary
     python tools/cron.py trigger daily-summary
@@ -82,6 +83,31 @@ def cmd_add(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_update(args: argparse.Namespace) -> int:
+    if args.prompt is None and args.schedule is None and args.thread_ts is None:
+        print("error: nothing to update — pass --prompt, --schedule, or --thread-ts",
+              file=sys.stderr)
+        return 1
+    try:
+        job = cs.update_cron(
+            job_id=args.id,
+            prompt=args.prompt,
+            schedule=args.schedule,
+            thread_ts=args.thread_ts,
+        )
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    if job is None:
+        print(f"error: cron {args.id!r} not found", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(job, indent=2, default=str))
+    else:
+        print(f"✓ updated cron {job['id']!r} — next run {_fmt_ts(job['next_run_at'])}")
+    return 0
+
+
 def cmd_show(args: argparse.Namespace) -> int:
     job = cs.get_cron(args.id)
     if not job:
@@ -144,6 +170,14 @@ def main(argv: list[str] | None = None) -> int:
     pa.add_argument("--disabled", action="store_true", help="Create disabled")
     pa.add_argument("--json", action="store_true", help="Print job as JSON")
     pa.set_defaults(func=cmd_add)
+
+    pu = sub.add_parser("update", help="Update an existing job's prompt/schedule/thread")
+    pu.add_argument("id")
+    pu.add_argument("--prompt", help="New prompt for the agent")
+    pu.add_argument("--schedule", help='New 5-field cron expression, e.g. "0 9 * * 1"')
+    pu.add_argument("--thread-ts", dest="thread_ts", help="New Slack thread to reply in")
+    pu.add_argument("--json", action="store_true", help="Print job as JSON")
+    pu.set_defaults(func=cmd_update)
 
     pl = sub.add_parser("list", help="List all cron jobs")
     pl.add_argument("--json", action="store_true", help="JSON output")
