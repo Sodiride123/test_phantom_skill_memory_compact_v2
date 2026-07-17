@@ -190,6 +190,33 @@ def test_missing_best_value_tag_warns():
     assert any("coding" in w for w in r["warnings"])
 
 
+# --- check_and_report (shared helper) ----------------------------------------
+
+def test_check_and_report_matches_validate_and_prints_pass():
+    import io
+    import contextlib
+    d = _good_dataset()
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        r = vd.check_and_report(d)
+    assert r == vd.validate(d)
+    assert "validation PASS" in buf.getvalue()
+
+
+def test_check_and_report_no_raise_on_bad_dataset():
+    import io
+    import contextlib
+    d = _good_dataset()
+    d["models"][0]["input_price"] = -1.0
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        r = vd.check_and_report(d)  # must not raise
+    out = buf.getvalue()
+    assert not r["ok"]
+    assert "validation FAIL" in out
+    assert "input_price" in out
+
+
 # --- standalone runner -------------------------------------------------------
 
 if __name__ == "__main__":

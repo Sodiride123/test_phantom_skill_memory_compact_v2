@@ -542,17 +542,7 @@ def _validate_dataset(dataset):
     """
     try:
         import validate_dataset as vd
-        report = vd.validate(dataset)
-        status = "PASS" if report["ok"] else "FAIL"
-        print(f"\nvalidation {status} · {len(report['errors'])} errors · "
-              f"{len(report['warnings'])} warnings")
-        for e in report["errors"]:
-            print(f"  ✗ ERROR   {e}")
-        for w in report["warnings"]:
-            print(f"  ⚠ WARNING {w}")
-        if not report["ok"]:
-            print("  → dataset failed integrity checks — review before relying on it.")
-        return report
+        return vd.check_and_report(dataset)
     except Exception as e:  # noqa: BLE001 — never let validation mask a scrape
         print(f"\nvalidation skipped ({e})")
         return None

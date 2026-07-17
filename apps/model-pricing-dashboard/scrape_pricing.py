@@ -19,9 +19,13 @@ Design
   keeps the dashboard usable rather than dropping rows.
 - Public sources only. No API keys, no paid logins.
 
+After writing, it runs a non-blocking `validate_dataset` integrity check on the
+freshly-assembled data and prints a one-line PASS/FAIL summary.
+
 Run:
-    python scrape_pricing.py            # refresh data/models.json
-    python scrape_pricing.py --dry-run  # scrape + report, don't write
+    python scrape_pricing.py               # refresh data/models.json
+    python scrape_pricing.py --dry-run     # scrape + report, don't write
+    python scrape_pricing.py --no-validate # skip the post-scrape integrity check
 """
 
 import argparse
@@ -32,10 +36,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # Make repo root importable so `clients.tavily_client` resolves when run from
-# this app directory.
+# this app directory; keep the app dir importable too (validate_dataset /
+# build_dataset) regardless of cwd.
+_APP_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+for _p in (str(_APP_DIR), str(_REPO_ROOT)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from clients.tavily_client import Tavily  # noqa: E402
 
@@ -176,7 +183,21 @@ def scrape(pages=PROVIDER_PAGES, verbose=True):
 # Refresh
 # ---------------------------------------------------------------------------
 
-def refresh(dry_run=False):
+def _validate_dataset(dataset):
+    """Non-blocking integrity check of the freshly-assembled dataset.
+
+    Delegates the summary wording to validate_dataset.check_and_report; a
+    validator import/parse problem is swallowed so it never masks an
+    otherwise-successful scrape (mirrors scrape_official.py / preview.py)."""
+    try:
+        import validate_dataset as vd
+        return vd.check_and_report(dataset)
+    except Exception as e:  # noqa: BLE001 — never let validation mask a scrape
+        print(f"\nvalidation skipped ({e})")
+        return None
+
+
+def refresh(dry_run=False, validate=True):
     print("Scraping aggregator pricing pages…")
     scraped = scrape()
     if not scraped:
@@ -225,14 +246,20 @@ def refresh(dry_run=False):
 
     if dry_run:
         print("--dry-run: not writing data/models.json")
-        return 0
+    else:
+        bd.write(dataset)
 
-    bd.write(dataset)
+    # Integrity gate: validate exactly what we assembled (== what was written).
+    # Non-blocking — a FAIL is surfaced but does not fail the refresh.
+    if validate:
+        _validate_dataset(dataset)
     return 0
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Refresh dashboard pricing from public aggregator.")
     ap.add_argument("--dry-run", action="store_true", help="scrape + report, don't write")
+    ap.add_argument("--no-validate", action="store_true",
+                    help="skip the post-scrape validate_dataset integrity check")
     args = ap.parse_args()
-    sys.exit(refresh(dry_run=args.dry_run))
+    sys.exit(refresh(dry_run=args.dry_run, validate=not args.no_validate))

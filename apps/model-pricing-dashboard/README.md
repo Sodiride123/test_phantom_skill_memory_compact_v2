@@ -124,9 +124,15 @@ provenance) to **`data/price_history.json`**, keeping the last **12** runs
 `data/models.json` with a new `last_collected` timestamp:
 
 ```bash
-python scrape_pricing.py            # scrape + write data/models.json
-python scrape_pricing.py --dry-run  # scrape + report, don't write
+python scrape_pricing.py               # scrape + write data/models.json
+python scrape_pricing.py --dry-run     # scrape + report, don't write
+python scrape_pricing.py --no-validate # skip the post-scrape integrity check
 ```
+
+Like `scrape_official.py`, this runs the non-blocking `validate_dataset` check
+after writing and prints the shared `validation PASS/FAIL · E errors · W
+warnings` line — so **every** writer (both scrapers and `preview.py`) surfaces
+the same integrity summary from one place (`validate_dataset.check_and_report`).
 
 `scrape_pricing.py` fetches each provider's aggregator page via Tavily
 `extract(extract_depth="advanced")`, parses the pricing tables (columns are

@@ -202,6 +202,30 @@ def _parse_iso(s):
         return None
 
 
+def check_and_report(dataset):
+    """Validate `dataset`, print a one-line summary + each error/warning, and
+    return the report from :func:`validate`.
+
+    This is the single source of the human-readable
+    ``validation PASS/FAIL · E errors · W warnings`` line, shared by preview.py
+    and the scrapers so the wording (which the #99 cron summary mirrors) lives
+    in one place. It does NOT catch exceptions — callers that must never let a
+    validation hiccup mask their main work wrap the import + call in try/except
+    (see scrape_official.py / scrape_pricing.py / preview.py).
+    """
+    report = validate(dataset)
+    n_e, n_w = len(report["errors"]), len(report["warnings"])
+    status = "PASS" if report["ok"] else "FAIL"
+    print(f"\nvalidation {status} · {n_e} errors · {n_w} warnings")
+    for e in report["errors"]:
+        print(f"  ✗ ERROR   {e}")
+    for w in report["warnings"]:
+        print(f"  ⚠ WARNING {w}")
+    if not report["ok"]:
+        print("  → dataset failed integrity checks — review before relying on it.")
+    return report
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Validate the dashboard dataset.")
     ap.add_argument("-f", "--file", default=str(DEFAULT_PATH),
