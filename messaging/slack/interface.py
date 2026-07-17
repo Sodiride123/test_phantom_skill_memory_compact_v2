@@ -100,7 +100,7 @@ from clients.agent_event_cache_client import (
     GetMessagesRequest,
 )
 from constants import AGENT_SETTINGS_PATH
-from core.config import load_agent_config
+from core.config import load_agent_config, save_agent_messages
 from core.metadata import load_sandbox_metadata
 from messaging.base import MessagingInterface
 from messaging.message_utils import resolve_reply_thread
@@ -3679,20 +3679,12 @@ class SlackInterface(MessagingInterface):
              (loaded and saved by the caller via agent_data).
           2. History sniff for the welcome signature in prior posts.
         """
-        # Load persisted state
-        agent_messages_file = (
-            Path(__file__).parent.parent.parent / ".agent_messages.json"
-        )
-        try:
-            agent_data = (
-                json.loads(agent_messages_file.read_text())
-                if agent_messages_file.exists()
-                else {}
+        logger = _get_logger()
+        logger.info(f"Agent messages state: {agent}")
+        if agent.get("welcomed"):
+            logger.info(
+                f"Agent {agent.get('name')} already welcomed in this channel; skipping welcome announcement."
             )
-        except Exception:
-            agent_data = {}
-
-        if agent_data.get("welcomed"):
             return False
 
         try:
@@ -3701,18 +3693,22 @@ class SlackInterface(MessagingInterface):
             return False
 
         for m in messages:
+            logger.info(f"Checking message: {m.get('text')}")
+            logger.info(
+                f"Welcome signature in message: {welcome_signature in (m.get('text') or '')} and Human message: {self.is_human_message(m)}"
+            )
             if self.is_human_message(m) or welcome_signature in (m.get("text") or ""):
-                agent_data["welcomed"] = True
+                agent["welcomed"] = True
                 try:
-                    agent_messages_file.write_text(json.dumps(agent_data))
+                    save_agent_messages(agent)
                 except Exception:
                     pass
                 return False
 
         try:
             self.say(welcome_text)
-            agent_data["welcomed"] = True
-            agent_messages_file.write_text(json.dumps(agent_data))
+            agent["welcomed"] = True
+            save_agent_messages(agent)
             return True
         except Exception as e:
             import sys as _sys

@@ -7,6 +7,7 @@
 # Sensitive files
 settings.json
 .env*
+services/whatsapp/memory/
 
 # Browser data
 **/browser_data/
