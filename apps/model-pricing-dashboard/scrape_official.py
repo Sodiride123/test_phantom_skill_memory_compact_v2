@@ -22,9 +22,14 @@ and overlays the values onto `data/models.json`:
 
 Public sources only. No API keys, no paid logins.
 
+After writing, it runs a non-blocking `validate_dataset` integrity check on the
+freshly-assembled data and prints a one-line PASS/FAIL summary, so a malformed
+manual refresh is caught here rather than only at preview/cron time.
+
 Run:
-    python scrape_official.py            # overlay official prices onto data/models.json
-    python scrape_official.py --dry-run  # scrape + report, don't write
+    python scrape_official.py              # overlay official prices onto data/models.json
+    python scrape_official.py --dry-run    # scrape + report, don't write
+    python scrape_official.py --no-validate # skip the post-scrape integrity check
 """
 
 import argparse
@@ -37,7 +42,7 @@ from pathlib import Path
 _APP_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _APP_DIR.parents[1]
 _BROWSER_DIR = _REPO_ROOT / "browser"
-for p in (str(_REPO_ROOT), str(_BROWSER_DIR)):
+for p in (str(_APP_DIR), str(_REPO_ROOT), str(_BROWSER_DIR)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
@@ -523,10 +528,41 @@ def scrape_context(google_names, verbose=True):
 
 
 # ---------------------------------------------------------------------------
+# Integrity gate
+# ---------------------------------------------------------------------------
+
+def _validate_dataset(dataset):
+    """Non-blocking integrity check of the freshly-assembled dataset.
+
+    Runs validate_dataset.validate() on the in-memory dataset we just wrote and
+    prints a one-line `validation PASS/FAIL · E errors · W warnings` summary
+    (plus each error/warning). Mirrors preview.py: any validator import/parse
+    problem is swallowed so it never masks an otherwise-successful scrape.
+    Returns the report dict, or None if validation could not run.
+    """
+    try:
+        import validate_dataset as vd
+        report = vd.validate(dataset)
+        status = "PASS" if report["ok"] else "FAIL"
+        print(f"\nvalidation {status} · {len(report['errors'])} errors · "
+              f"{len(report['warnings'])} warnings")
+        for e in report["errors"]:
+            print(f"  ✗ ERROR   {e}")
+        for w in report["warnings"]:
+            print(f"  ⚠ WARNING {w}")
+        if not report["ok"]:
+            print("  → dataset failed integrity checks — review before relying on it.")
+        return report
+    except Exception as e:  # noqa: BLE001 — never let validation mask a scrape
+        print(f"\nvalidation skipped ({e})")
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Overlay
 # ---------------------------------------------------------------------------
 
-def overlay(dry_run=False):
+def overlay(dry_run=False, validate=True):
     if not DATA_PATH.exists():
         print(f"ERROR: {DATA_PATH} not found — run scrape_pricing.py first.")
         return 1
@@ -656,21 +692,27 @@ def overlay(dry_run=False):
 
     if dry_run:
         print("\n--dry-run: not writing data/models.json or price_history.json")
-        return 0
+    else:
+        DATA_PATH.write_text(json.dumps(dataset, indent=2))
+        print(f"\nWrote {DATA_PATH} — {total_matched} models upgraded to 'official'.")
 
-    DATA_PATH.write_text(json.dumps(dataset, indent=2))
-    print(f"\nWrote {DATA_PATH} — {total_matched} models upgraded to 'official'.")
+        # Append this run's snapshot (append-only, capped) for next run's comparison.
+        history.append(_snapshot(dataset["models"], date_str))
+        history = _trim_history(history)
+        HISTORY_PATH.write_text(json.dumps(history, indent=2))
+        print(f"Wrote {HISTORY_PATH} — {len(history)} run(s) retained (cap {HISTORY_CAP}).")
 
-    # Append this run's snapshot (append-only, capped) for next run's comparison.
-    history.append(_snapshot(dataset["models"], date_str))
-    history = _trim_history(history)
-    HISTORY_PATH.write_text(json.dumps(history, indent=2))
-    print(f"Wrote {HISTORY_PATH} — {len(history)} run(s) retained (cap {HISTORY_CAP}).")
+    # Integrity gate: validate exactly what we produced (in-memory == on-disk).
+    # Non-blocking — a validation FAIL is surfaced but does not fail the scrape.
+    if validate:
+        _validate_dataset(dataset)
     return 0
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Overlay official-page prices onto the dashboard dataset.")
     ap.add_argument("--dry-run", action="store_true", help="scrape + report, don't write")
+    ap.add_argument("--no-validate", action="store_true",
+                    help="skip the post-scrape validate_dataset integrity check")
     args = ap.parse_args()
-    sys.exit(overlay(dry_run=args.dry_run))
+    sys.exit(overlay(dry_run=args.dry_run, validate=not args.no_validate))

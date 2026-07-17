@@ -80,10 +80,18 @@ python validate_dataset.py -f x.json
 **Best fidelity — official pages via the browser skill (`scrape_official.py`)**
 
 ```bash
-python scrape_pricing.py            # 1. aggregator baseline (all providers)
-python scrape_official.py           # 2. overlay OFFICIAL prices where available
-python scrape_official.py --dry-run # scrape + report, don't write
+python scrape_pricing.py               # 1. aggregator baseline (all providers)
+python scrape_official.py              # 2. overlay OFFICIAL prices where available
+python scrape_official.py --dry-run    # scrape + report, don't write
+python scrape_official.py --no-validate # skip the post-scrape integrity check
 ```
+
+After writing, `scrape_official.py` runs a **non-blocking** `validate_dataset`
+integrity check on the freshly-assembled data and prints a one-line
+`validation PASS/FAIL · E errors · W warnings` summary (listing any errors /
+warnings). So a malformed manual refresh is caught right at the scrape rather
+than only at preview or in the weekly cron. A validator problem never masks an
+otherwise-successful scrape; pass `--no-validate` to skip it.
 
 `scrape_official.py` drives the persistent stealth browser to render each
 provider's **own** pricing page, parses the live token-price tables from the
