@@ -55,6 +55,26 @@ python preview.py --no-shot  # just print #data-health, no screenshot
 (Chart.js loads from a CDN, so keep an internet connection for the charts. The
 data itself is served from the local `data/models.json`.)
 
+`preview.py` first runs `validate_dataset.py` and prints a one-line PASS/FAIL
+summary, so a malformed dataset is caught before you look at the render.
+
+## Validate the data
+
+`validate_dataset.py` checks the assembled `data/models.json` against the
+invariants the dashboard relies on — every model has a valid name/provider,
+prices are `None` or `>= 0`, context windows are positive, provenance values are
+one of `official` / `aggregator` / `fallback`, `price_stale` rows are priced
+`fallback`, top-level counts/timestamp are consistent, and names are unique. It
+also emits **warnings** (non-failing) for smells like two same-family models
+sharing an identical price triple — the shape of the [#97] aggregator
+mis-match. Complements the parser/matcher tests by pinning the *finished* data.
+
+```bash
+python validate_dataset.py          # human summary; exit 1 if any ERROR
+python validate_dataset.py --json   # machine-readable report
+python validate_dataset.py -f x.json
+```
+
 ## Refresh the data
 
 **Best fidelity — official pages via the browser skill (`scrape_official.py`)**

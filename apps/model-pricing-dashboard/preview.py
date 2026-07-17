@@ -61,6 +61,21 @@ def main():
                     help="seconds to wait for the SPA to render (default 2)")
     args = ap.parse_args()
 
+    # Validate the shipped dataset before rendering — surface integrity issues
+    # (bad provenance, negative price, collision smell) as a one-line summary.
+    try:
+        import validate_dataset as vd
+        report = vd.validate(vd.load_dataset())
+        status = "PASS" if report["ok"] else "FAIL"
+        print(f"dataset validation: {status} — {report['model_count']} models · "
+              f"{len(report['errors'])} error(s) · {len(report['warnings'])} warning(s)")
+        for e in report["errors"]:
+            print(f"  ✗ {e}")
+        for w in report["warnings"]:
+            print(f"  ⚠ {w}")
+    except Exception as e:  # noqa: BLE001 — never let validation block a preview
+        print(f"dataset validation: skipped ({e})")
+
     from browser_interface import BrowserInterface
 
     with _serve(_APP_DIR) as port:
