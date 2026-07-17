@@ -125,6 +125,52 @@ def test_no_table_returns_empty():
     assert sp.parse_table("Just prose, no pricing table here.") == []
 
 
+# --- match_row: exact normalized matching (regression for #97) ---------------
+
+def _scraped(*names):
+    """Build a {normalized_name: row} dict like scrape() returns."""
+    return {
+        sp.norm(n): {"name": n, "input": 2.5, "cached": None, "output": 15.0}
+        for n in names
+    }
+
+
+def test_match_row_exact_hit():
+    scraped = _scraped("GPT-5.4")
+    assert sp.match_row("GPT-5.4", scraped)["name"] == "GPT-5.4"
+
+
+def test_match_row_ignores_spacing_and_punctuation():
+    # norm() strips spaces/punctuation, so these still match exactly.
+    scraped = _scraped("Gemini 2.5 Flash-Lite")
+    assert sp.match_row("Gemini 2.5 Flash Lite", scraped)["name"] == "Gemini 2.5 Flash-Lite"
+
+
+def test_match_row_suffixed_variant_not_matched_to_base():
+    # The #97 collision: aggregator lists only "GPT-5.4", catalog wants
+    # "GPT-5.4 Pro". It must NOT inherit the base row's price — stays unmatched
+    # (kept stale) so the official overlay can price it correctly.
+    scraped = _scraped("GPT-5.4")
+    assert sp.match_row("GPT-5.4 Pro", scraped) is None
+
+
+def test_match_row_base_not_matched_to_suffixed_variant():
+    # Reverse direction: aggregator lists only "GPT-5.4 Pro", catalog wants the
+    # base "GPT-5.4". The base must not borrow the Pro row.
+    scraped = _scraped("GPT-5.4 Pro")
+    assert sp.match_row("GPT-5.4", scraped) is None
+
+
+def test_match_row_variant_matches_its_own_row():
+    # When the variant DOES have its own row, it matches that (not the base).
+    scraped = _scraped("GPT-5.4", "GPT-5.4 Pro")
+    assert sp.match_row("GPT-5.4 Pro", scraped)["name"] == "GPT-5.4 Pro"
+
+
+def test_match_row_empty_name_is_none():
+    assert sp.match_row("", _scraped("GPT-5.4")) is None
+
+
 # --- standalone runner -------------------------------------------------------
 
 if __name__ == "__main__":

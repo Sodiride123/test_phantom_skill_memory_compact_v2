@@ -139,6 +139,21 @@ def _extract_with_retry(tav, url, attempts=3):
     return None, last_err
 
 
+def match_row(catalog_name: str, scraped: dict):
+    """Match a catalog model to a scraped aggregator row by EXACT normalized name.
+
+    Matching is STRICT (exact normalized name), mirroring scrape_official.py. A
+    variant with no aggregator row of its own (e.g. "GPT-5.4 Pro" when the page
+    only lists "GPT-5.4") is intentionally left unmatched — kept as stale
+    fallback — rather than inheriting a similarly-named base model's price. An
+    earlier bidirectional substring fallback (`key in k or k in key`) caused
+    exactly that collision, silently mis-pricing suffixed variants. See #97.
+    """
+    if not catalog_name:
+        return None
+    return scraped.get(norm(catalog_name))
+
+
 def scrape(pages=PROVIDER_PAGES, verbose=True):
     """Scrape every provider page. Returns {normalized_name: price_dict}."""
     tav = Tavily()
@@ -173,14 +188,7 @@ def refresh(dry_run=False):
     stale_names = []
 
     for m in catalog:
-        key = norm(m["name"])
-        hit = scraped.get(key)
-        if hit is None:
-            # Try a looser match: catalog name contained in a scraped key.
-            hit = next(
-                (v for k, v in scraped.items() if key and (key in k or k in key)),
-                None,
-            )
+        hit = match_row(m["name"], scraped)
         if hit is not None:
             m["input_price"] = hit["input"]
             m["cached_price"] = hit["cached"]
