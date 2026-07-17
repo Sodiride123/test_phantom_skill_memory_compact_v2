@@ -662,10 +662,12 @@
                 const r = await fetch('/api/orchestrator/config');
                 const d = await r.json();
                 const cfg = d.config || {};
-                const running = !!d.running;
 
-                // Always safe to update the read-only status badge/meta.
-                updateOrchStatus(cfg, running);
+                // Always safe to update the read-only audit meta.
+                const meta = document.getElementById('orchMeta');
+                meta.textContent = cfg.updated_at
+                    ? `Last change at ${formatTime(cfg.updated_at)}`
+                    : '';
 
                 // Only sync the checkboxes when we are NOT mid-save. While saving,
                 // the toggles are greyed out and pinned to the user's choice.
