@@ -163,6 +163,13 @@ if [[ "$MESSAGING_CHANNEL" == "whatsapp" ]]; then
         cp "$SCRIPT_DIR/systemd/whatsapp/ninja-queued-ack.service" /etc/systemd/system/ninja-queued-ack.service
     fi
 
+    # systemd ignores /etc/environment — inject channel for dashboard badge/mode.
+    for svc in ninja-dashboard; do
+        mkdir -p "/etc/systemd/system/${svc}.service.d"
+        printf '[Service]\nEnvironment=MESSAGING_CHANNEL=%s\n' "$MESSAGING_CHANNEL" \
+            > "/etc/systemd/system/${svc}.service.d/channel.conf"
+    done
+
     systemctl disable --now ninja-monitor.service 2>/dev/null || true
     systemctl disable --now ninja-health.service 2>/dev/null || true
 
@@ -196,7 +203,7 @@ else
 
     # systemd ignores /etc/environment, so inject MESSAGING_CHANNEL into the units
     # that build a messaging interface (else they fall back to the "slack" default).
-    for svc in ninja-monitor ninja-health; do
+    for svc in ninja-monitor ninja-health ninja-dashboard; do
         mkdir -p "/etc/systemd/system/${svc}.service.d"
         printf '[Service]\nEnvironment=MESSAGING_CHANNEL=%s\n' "$MESSAGING_CHANNEL" \
             > "/etc/systemd/system/${svc}.service.d/channel.conf"

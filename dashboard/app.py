@@ -82,6 +82,14 @@ def get_agent_info():
         agent["id"] = agent_id
         agent["channel"] = settings.get("default_channel", "")
         agent["workspace"] = settings.get("workspace", "")
+        from messaging.factory import resolve_messaging_channel
+
+        if resolve_messaging_channel() == "whatsapp":
+            wa = settings.get("whatsapp")
+            if isinstance(wa, dict):
+                label = (wa.get("channel_label") or "").strip()
+                if label:
+                    agent["channel"] = label
         return agent
     except Exception:
         return {**AGENTS["ninja"], "id": "ninja", "channel": "", "workspace": ""}

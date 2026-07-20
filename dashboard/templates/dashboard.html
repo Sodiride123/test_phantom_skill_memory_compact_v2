@@ -526,7 +526,7 @@
             setInterval(loadTools, 60000);
             setInterval(loadChart, 60000);
             setInterval(loadTotalCost, 30000);
-            setInterval(loadOrchestratorConfig, 10000);
+            await loadOrchestratorConfig();
         }
 
         async function loadTotalCost() {
@@ -593,51 +593,50 @@
         // touch the checkboxes. A single flag is enough now that there is no
         // "unsaved edits" concept — every change is saved immediately.
         let orchSaving = false;
+        // let orchSeq = 0;  // incremented on every save to detect stale poll results
 
         const orchEnabledEl = document.getElementById('orchEnabled');
 
         // Wire both toggles to the same save-on-change handler.
         orchEnabledEl.addEventListener('change', onOrchToggleChange);
 
+        function renderOrchestrator(enabled, updatedAt) {
+            orchEnabledEl.checked = enabled !== false;
+            if (updatedAt !== undefined) {
+                document.getElementById('orchMeta').textContent =
+                    updatedAt ? `Last change at ${formatTime(updatedAt)}` : '';
+            }
+        }
+
+        function setOrchNote(cls, text) {
+            const note = document.getElementById('orchSaveNote');
+            note.className = 'orch-save-note' + (cls ? ' ' + cls : '');
+            note.textContent = text;
+        }
+
         async function onOrchToggleChange(evt) {
-            const changed = evt.target;
+            // Value the user just selected — this is our optimistic intent.
+            const desired = evt.target.checked;
+            const previousValue = !desired;
 
-            // The checkbox has *already* flipped to its new value by the time the
-            // 'change' event fires, so its previous value is the logical NOT.
-            const previousValue = !changed.checked;
-
-            // 1) Grey out BOTH toggles immediately so nothing else can be flipped
-            //    while this write is settling.
             orchSaving = true;
             orchEnabledEl.disabled = true;
-
-            const note = document.getElementById('orchSaveNote');
-            note.className = 'orch-save-note';
-            note.textContent = 'Saving…';
-
-            // 2) Build payload from the CURRENT (post-toggle) state of both toggles.
-            const body = {
-                enabled: orchEnabledEl.checked,
-                updated_by: 'admin'
-            };
 
             try {
                 const r = await fetch('/api/orchestrator/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
+                    body: JSON.stringify({ enabled: desired, updated_by: 'admin' })
                 });
                 const d = await r.json();
 
-                if (d.ok) {
+                if (r.ok && d.ok) {
                     // Success — the toggle keeps its new value.
-                    note.className = 'orch-save-note ok';
-                    note.textContent = '✓ Saved';
+                    renderOrchestrator(d.enabled, (d.config || {}).updated_at);
                 } else {
                     // Backend rejected — revert the toggle the user changed.
-                    changed.checked = previousValue;
-                    note.className = 'orch-save-note err';
-                    note.textContent = '✕ ' + (d.error || 'Save failed');
+                    renderOrchestrator(previousValue);
+                    setOrchNote('err', '✕ ' + (d.error || 'Save failed'));
                 }
             } catch (e) {
                 // Network error — revert.

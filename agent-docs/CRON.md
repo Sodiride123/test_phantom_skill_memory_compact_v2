@@ -35,10 +35,6 @@ python tools/cron.py list --json
 # Inspect
 python tools/cron.py show daily-summary
 
-# Update an existing job's prompt / schedule / thread (state is preserved)
-python tools/cron.py update daily-summary --prompt "New prompt text"
-python tools/cron.py update daily-summary --schedule "0 8 * * 1-5"
-
 # Pause / resume
 python tools/cron.py disable daily-summary
 python tools/cron.py enable daily-summary
@@ -50,7 +46,7 @@ python tools/cron.py trigger daily-summary
 python tools/cron.py remove daily-summary
 ```
 
-`--json` is supported on `list`, `add`, and `update` for machine-readable output.
+`--json` is supported on `list` and `add` for machine-readable output.
 
 The agent always posts to its single configured Slack channel — there
 is no per-job channel. If a job needs to reply in a thread, pass

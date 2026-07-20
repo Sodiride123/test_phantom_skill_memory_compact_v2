@@ -26,8 +26,7 @@ Usage:
 
 import math
 
-import requests
-from clients.litellm_client import api_url, get_headers, resolve_model
+from clients.litellm_client import get_headers, litellm_request, resolve_model
 
 DEFAULT_EMBED_MODEL = "embed-small"
 
@@ -62,15 +61,19 @@ def embed(
     """
     model_id = resolve_model(model)
 
-    r = requests.post(
-        api_url("/v1/embeddings"),
+    r = litellm_request(
+        "POST",
+        "/v1/embeddings",
         headers=get_headers(),
         json={"model": model_id, "input": text},
         timeout=timeout,
     )
 
     if r.status_code != 200:
-        error = r.json().get("error", {}).get("message", r.text[:300])
+        try:
+            error = r.json().get("error", {}).get("message", r.text[:300])
+        except Exception:
+            error = r.text[:300]
         raise RuntimeError(f"Embedding failed ({r.status_code}): {error}")
 
     return r.json()["data"][0]["embedding"]
@@ -101,15 +104,19 @@ def embed_batch(
     """
     model_id = resolve_model(model)
 
-    r = requests.post(
-        api_url("/v1/embeddings"),
+    r = litellm_request(
+        "POST",
+        "/v1/embeddings",
         headers=get_headers(),
         json={"model": model_id, "input": texts},
         timeout=timeout,
     )
 
     if r.status_code != 200:
-        error = r.json().get("error", {}).get("message", r.text[:300])
+        try:
+            error = r.json().get("error", {}).get("message", r.text[:300])
+        except Exception:
+            error = r.text[:300]
         raise RuntimeError(f"Batch embedding failed ({r.status_code}): {error}")
 
     data = r.json()["data"]

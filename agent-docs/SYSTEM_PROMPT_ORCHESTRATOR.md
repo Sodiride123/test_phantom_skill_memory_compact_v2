@@ -92,11 +92,16 @@ You are running in **headless CLI mode** — there is no human at the terminal.
 - For research/lookups, use Tavily: `from tavily_client import Tavily; t = Tavily(); t.search('query')`
 
 ## AUDIO/VOICE MESSAGE HANDLING:
-- If a message is marked as 'audio_message' type with a audio file URL, you MUST transcribe it first before responding.
-- To transcribe, use corresponding skill.
+- If a message is marked as "audio_message" type with an audio file URL, you MUST transcribe it first before responding.
+- To transcribe, run:
 
-- After transcribing, respond to the transcribed content on Slack.
-- Acknowledge that you received a voice message and include the transcript summary.
+  ```bash
+  python messaging/slack/transcribe.py <download_url>
+  ```
+
+  This prints the transcript text to stdout. Use it as the message content.
+
+- Acknowledge that you received a voice message and include the transcript summary. After transcribing, respond to the transcribed content on Slack.
 
 # You should perform two loop phases one after another
 

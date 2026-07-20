@@ -12,8 +12,12 @@ Settings keys (read from settings.json env block):
 """
 
 import json
+import os
+import time
 from functools import cache
 from pathlib import Path
+
+import requests
 
 # ---------------------------------------------------------------------------
 # Settings discovery
@@ -57,13 +61,34 @@ def get_config() -> dict:
     }
 
 
+def _parse_custom_headers() -> dict:
+    """Parse ANTHROPIC_CUSTOM_HEADERS env var into a dict.
+
+    Claude Code reads this env var and forwards every entry as an HTTP header on
+    each Anthropic API request it makes inside the subprocess. Parsing it here
+    lets non-Claude callers (e.g. image/audio tool helpers) attach the same
+    x-ninja-* tracking headers to their own LiteLLM requests without going
+    through the Claude session.
+    """
+    raw = os.environ.get("ANTHROPIC_CUSTOM_HEADERS", "")
+    if not raw:
+        return {}
+    result = {}
+    for line in raw.strip().splitlines():
+        if ": " in line:
+            key, _, value = line.partition(": ")
+            result[key.strip()] = value.strip()
+    return result
+
+
 def get_headers(extra: dict | None = None) -> dict:
-    """Return standard Authorization + Content-Type headers."""
+    """Return standard Authorization + Content-Type headers, plus any x-ninja-* from env."""
     cfg = get_config()
     h = {
         "Authorization": f"Bearer {cfg['api_key']}",
         "Content-Type": "application/json",
     }
+    h.update(_parse_custom_headers())
     if extra:
         h.update(extra)
     return h
@@ -74,6 +99,65 @@ def api_url(path: str) -> str:
     cfg = get_config()
     base = cfg["base_url"].rstrip("/")
     return f"{base}{path}"
+
+
+# ---------------------------------------------------------------------------
+# Retry helper
+# ---------------------------------------------------------------------------
+
+#: HTTP status codes that indicate a transient server error worth retrying.
+RETRIABLE_5XX = frozenset({500, 502, 503, 504})
+
+_DEFAULT_MAX_RETRIES = 3
+_DEFAULT_BACKOFF_BASE = 1.0  # seconds; delay = base * 2^(attempt-1) → 1s, 2s, 4s
+
+
+def litellm_request(
+    method: str,
+    path: str,
+    *,
+    max_retries: int = _DEFAULT_MAX_RETRIES,
+    backoff_base: float = _DEFAULT_BACKOFF_BASE,
+    **kwargs,
+) -> requests.Response:
+    """Make an HTTP request to the LiteLLM gateway, retrying on transient 5xx errors.
+
+    Args:
+        method:      HTTP method (``"GET"``, ``"POST"``, etc.).
+        path:        Gateway-relative path, e.g. ``"/v1/chat/completions"``.
+        max_retries: Total number of attempts (default 3 → up to 2 retries).
+        backoff_base: Base delay in seconds; doubles each attempt (1s, 2s, 4s).
+        **kwargs:    Forwarded verbatim to :func:`requests.request` (``json``,
+                     ``data``, ``files``, ``headers``, ``timeout``, …).
+
+    Returns:
+        The :class:`requests.Response` from the first successful (non-5xx) attempt
+        *or* the final failed response after all retries are exhausted.
+
+    Notes:
+        * Only ``{500, 502, 503, 504}`` trigger a retry; 4xx and network errors
+          are returned / raised immediately.
+        * Callers are responsible for checking ``response.status_code`` and
+          raising their own domain-specific errors.
+        * If ``files`` are provided the caller must ensure they are seekable or
+          pass fresh file handles on each call (this function does not re-open
+          files between attempts). For multipart uploads that may be retried,
+          open the files *inside* a ``for attempt`` loop and call this function
+          once per attempt instead.
+    """
+    url = api_url(path)
+    last_response: requests.Response | None = None
+
+    for attempt in range(1, max_retries + 1):
+        last_response = requests.request(method, url, **kwargs)
+
+        if last_response.status_code not in RETRIABLE_5XX:
+            return last_response
+
+        if attempt < max_retries:
+            time.sleep(backoff_base * (2 ** (attempt - 1)))
+
+    return last_response  # type: ignore[return-value]
 
 
 # ---------------------------------------------------------------------------

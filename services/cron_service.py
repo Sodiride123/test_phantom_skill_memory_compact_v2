@@ -233,36 +233,6 @@ def trigger_cron(job_id: str) -> bool:
     return False
 
 
-def update_cron(
-    job_id: str,
-    prompt: str | None = None,
-    schedule: str | None = None,
-    thread_ts: str | None = None,
-) -> dict[str, Any] | None:
-    """Update an existing job's prompt/schedule/thread_ts in place.
-
-    Only the fields passed (non-None) are changed; the job's identity and
-    run state (created_at, run_count, last_run_at) are preserved. Changing the
-    schedule recomputes next_run_at. Returns the updated job, or None if no job
-    with ``job_id`` exists. Raises ValueError on an invalid schedule.
-    """
-    if schedule is not None and not is_valid_schedule(schedule):
-        raise ValueError(f"Invalid cron expression: {schedule!r}")
-    jobs = load_crons()
-    for job in jobs:
-        if job.get("id") == job_id:
-            if prompt is not None:
-                job["prompt"] = prompt
-            if thread_ts is not None:
-                job["thread_ts"] = thread_ts
-            if schedule is not None:
-                job["schedule"] = schedule
-                job["next_run_at"] = calculate_next_run(schedule)
-            save_crons(jobs)
-            return job
-    return None
-
-
 def get_cron(job_id: str) -> dict[str, Any] | None:
     for job in load_crons():
         if job.get("id") == job_id:
