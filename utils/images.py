@@ -62,11 +62,22 @@ from __future__ import annotations
 
 import base64
 import os
+import time
 from pathlib import Path
 from typing import Iterable, Sequence
 
 import requests
-from clients.litellm_client import api_url, get_config, get_headers, resolve_model
+from clients.litellm_client import (
+    _DEFAULT_BACKOFF_BASE,
+    _DEFAULT_MAX_RETRIES,
+    RETRIABLE_5XX,
+    api_url,
+    get_config,
+    get_headers,
+    litellm_request,
+    resolve_model,
+)
+from utils.cost import record_tool_call_cost
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -210,12 +221,14 @@ def generate_image(
     if quality:
         payload["quality"] = quality
 
-    r = requests.post(
-        api_url("/v1/images/generations"),
+    r = litellm_request(
+        "POST",
+        "/v1/images/generations",
         headers=get_headers(),
         json=payload,
         timeout=timeout,
     )
+
     if r.status_code != 200:
         try:
             err = r.json().get("error", {}).get("message", r.text[:300])
@@ -227,6 +240,7 @@ def generate_image(
     if not data.get("data"):
         raise RuntimeError(f"No image data in response: {data}")
 
+    record_tool_call_cost(dict(r.headers), prompt, model)
     return _save_item(data["data"][0], output)
 
 
@@ -258,12 +272,14 @@ def generate_images(
     if quality:
         payload["quality"] = quality
 
-    r = requests.post(
-        api_url("/v1/images/generations"),
+    r = litellm_request(
+        "POST",
+        "/v1/images/generations",
         headers=get_headers(),
         json=payload,
         timeout=timeout,
     )
+
     if r.status_code != 200:
         try:
             err = r.json().get("error", {}).get("message", r.text[:300])
@@ -336,9 +352,8 @@ def edit_image(
     # Multipart form with the `image` field repeated for each reference.
     # Both "image" (repeated) and "image[]" are accepted by the gateway; we use
     # "image" which matches the OpenAI Python SDK's `image=[...]` pattern.
-    fields: list[tuple[str, tuple]] = [
-        ("image", (p.name, open(p, "rb"), _mime_for(p))) for p in paths
-    ]
+    # File handles are re-opened inside the retry loop so each attempt gets
+    # a fresh read position.
     data = {
         "model": resolve_model(model),
         "prompt": prompt,
@@ -348,26 +363,39 @@ def edit_image(
     if quality:
         data["quality"] = quality
 
-    # `requests` needs Authorization header but *not* Content-Type (it sets
-    # the multipart boundary itself).
-    headers = {"Authorization": get_headers()["Authorization"]}
+    # Omit Content-Type so requests can set the multipart boundary itself.
+    headers = {k: v for k, v in get_headers().items() if k != "Content-Type"}
 
-    try:
-        r = requests.post(
-            api_url("/v1/images/edits"),
-            headers=headers,
-            data=data,
-            files=fields,
-            timeout=timeout,
-        )
-    finally:
-        for _, (_, fh, _) in fields:
-            try:
-                fh.close()
-            except Exception:
-                pass
+    # edit_image uses a multipart upload, so file handles must be re-opened on
+    # each retry attempt — litellm_request() cannot do this transparently.
+    # We use the shared constants from litellm_client for consistency.
+    r = None
+    for attempt in range(1, _DEFAULT_MAX_RETRIES + 1):
+        fields = [("image", (p.name, open(p, "rb"), _mime_for(p))) for p in paths]
+        try:
+            r = litellm_request(
+                "POST",
+                "/v1/images/edits",
+                headers=headers,
+                data=data,
+                files=fields,
+                timeout=timeout,
+                # Pass max_retries=1 so litellm_request makes a single attempt;
+                # the outer loop handles retries with fresh file handles.
+                max_retries=1,
+            )
+        finally:
+            for _, (_, fh, _) in fields:
+                try:
+                    fh.close()
+                except Exception:
+                    pass
 
-    if r.status_code != 200:
+        if r.status_code == 200:
+            break
+        if r.status_code in RETRIABLE_5XX and attempt < _DEFAULT_MAX_RETRIES:
+            time.sleep(_DEFAULT_BACKOFF_BASE * (2 ** (attempt - 1)))
+            continue
         try:
             err = r.json().get("error", {}).get("message", r.text[:400])
         except Exception:
@@ -378,6 +406,7 @@ def edit_image(
     if not payload.get("data"):
         raise RuntimeError(f"No image data in edit response: {payload}")
 
+    record_tool_call_cost(dict(r.headers), prompt, model)
     return _save_item(payload["data"][0], output)
 
 

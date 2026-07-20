@@ -40,8 +40,7 @@ Usage:
 import time
 from pathlib import Path
 
-import requests
-from clients.litellm_client import api_url, get_headers, resolve_model
+from clients.litellm_client import get_headers, litellm_request, resolve_model
 
 # Valid sizes for video generation
 VALID_SIZES = ["1280x720", "720x1280"]
@@ -93,15 +92,19 @@ def submit_video(
         "size": size,
     }
 
-    r = requests.post(
-        api_url("/v1/videos"),
+    r = litellm_request(
+        "POST",
+        "/v1/videos",
         headers=get_headers(),
         json=payload,
         timeout=timeout,
     )
 
     if r.status_code != 200:
-        error = r.json().get("error", {}).get("message", r.text[:300])
+        try:
+            error = r.json().get("error", {}).get("message", r.text[:300])
+        except Exception:
+            error = r.text[:300]
         raise RuntimeError(f"Video submission failed ({r.status_code}): {error}")
 
     data = r.json()
@@ -129,8 +132,9 @@ def check_video_status(video_id: str, timeout: int = 30) -> dict:
         >>> print(info["status"])
         'in_progress'
     """
-    r = requests.get(
-        api_url(f"/v1/videos/{video_id}"),
+    r = litellm_request(
+        "GET",
+        f"/v1/videos/{video_id}",
         headers=get_headers({"custom-llm-provider": "openai"}),
         timeout=timeout,
     )
@@ -214,8 +218,9 @@ def download_video(
         >>> path = download_video("video_abc123", output="my_video.mp4")
         'my_video.mp4'
     """
-    r = requests.get(
-        api_url(f"/v1/videos/{video_id}/content"),
+    r = litellm_request(
+        "GET",
+        f"/v1/videos/{video_id}/content",
         headers=get_headers({"custom-llm-provider": "openai"}),
         timeout=timeout,
     )

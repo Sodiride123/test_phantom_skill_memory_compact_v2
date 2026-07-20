@@ -34,7 +34,13 @@ import json
 from typing import Generator
 
 import requests
-from clients.litellm_client import api_url, get_config, get_headers, resolve_model
+from clients.litellm_client import (
+    api_url,
+    get_config,
+    get_headers,
+    litellm_request,
+    resolve_model,
+)
 
 
 def chat_messages(
@@ -73,15 +79,19 @@ def chat_messages(
         **kwargs,
     }
 
-    r = requests.post(
-        api_url("/v1/chat/completions"),
+    r = litellm_request(
+        "POST",
+        "/v1/chat/completions",
         headers=get_headers(),
         json=payload,
         timeout=timeout,
     )
 
     if r.status_code != 200:
-        error = r.json().get("error", {}).get("message", r.text[:300])
+        try:
+            error = r.json().get("error", {}).get("message", r.text[:300])
+        except Exception:
+            error = r.text[:300]
         raise RuntimeError(f"Chat completion failed ({r.status_code}): {error}")
 
     return r.json()["choices"][0]["message"]["content"]
@@ -170,8 +180,9 @@ def chat_stream(
         "stream": True,
     }
 
-    r = requests.post(
-        api_url("/v1/chat/completions"),
+    r = litellm_request(
+        "POST",
+        "/v1/chat/completions",
         headers=get_headers(),
         json=payload,
         timeout=timeout,

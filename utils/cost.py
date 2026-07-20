@@ -8,7 +8,9 @@ price directly with margin 0.0.
 
 import fcntl
 import json
+import os
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -210,6 +212,63 @@ def _write_task_log(
         )
     except Exception as e:
         print(f"⚠️ Could not write task log: {e}", file=sys.stderr)
+
+
+def record_tool_call_cost(
+    response_headers: dict,
+    prompt: str,
+    model: str,
+) -> None:
+    """Write a task log entry for a direct LiteLLM tool call (image/video/audio gen).
+
+    Reads cost from the ``x-litellm-response-cost`` response header and task
+    metadata (task_id, title, conversation_id) from ``ANTHROPIC_CUSTOM_HEADERS``
+    in the environment — the same env var the parent Claude session injects.
+    """
+    try:
+        cost_str = response_headers.get("x-litellm-response-cost", "")
+        if not cost_str:
+            return
+        cost = float(cost_str)
+
+        raw = os.environ.get("ANTHROPIC_CUSTOM_HEADERS", "")
+        custom: dict[str, str] = {}
+        for line in raw.strip().splitlines():
+            if ": " in line:
+                key, _, val = line.partition(": ")
+                custom[key.strip()] = val.strip()
+
+        task_id = custom.get(HEADER_NINJA_TASK_ID)
+        if not task_id:
+            return
+
+        feature = custom.get(HEADER_NINJA_FEATURE, "")
+        channel = (
+            load_agent_config()
+            .get("default_channel", "")
+            .encode("ascii", errors="ignore")
+            .decode("ascii")
+        )
+        prefix = f"{channel} - "
+        title = (
+            feature[len(prefix) :]
+            if channel and feature.startswith(prefix)
+            else feature
+        )
+        title = title or prompt[:50]
+        conversation_id = custom.get(HEADER_NINJA_CONVERSATION_ID)
+
+        _write_task_log(
+            str(uuid.uuid4()),
+            cost,
+            [prompt],
+            title,
+            model=model,
+            task_id=task_id,
+            conversation_id=conversation_id,
+        )
+    except Exception as e:
+        print(f"⚠️ Could not record tool call cost: {e}", file=sys.stderr)
 
 
 def record_task_cost(

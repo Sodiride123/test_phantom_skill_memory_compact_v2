@@ -31,10 +31,18 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 
 from browser.browser_server import PSIPHON_HOST, PSIPHON_PORT, PSIPHON_PROXY
-from clients.litellm_client import api_url, get_config, get_headers
+from clients.litellm_client import (
+    _DEFAULT_BACKOFF_BASE,
+    _DEFAULT_MAX_RETRIES,
+    RETRIABLE_5XX,
+    api_url,
+    get_config,
+    get_headers,
+)
 from clients.posthog_client import capture
 from messaging import get_messaging_interface
 from processes.common import MONITOR_HEARTBEAT_FILE
@@ -50,6 +58,13 @@ IP_ECHO_URL = "https://api.ipify.org?format=json"
 
 # A heartbeat file older than this (seconds) means the monitor has stalled.
 MONITOR_STALE_AFTER = 5 * 60  # 5 minutes
+
+
+def _print(msg: str) -> None:
+    """Print msg to stdout with a timestamp prefix matching other ninja logs."""
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"{ts} | {msg}", flush=True)
+
 
 # Liveness heartbeat for this service: overwritten with the current unix
 # timestamp at the end of every check cycle. Mirrors MONITOR_HEARTBEAT_FILE so
@@ -88,7 +103,7 @@ def check_messaging_health() -> int:
         result = {"service": channel, "status": "error", "message": str(e)}
 
     if result["status"] == "ok":
-        print(f"🔑 {channel} token OK", flush=True)
+        _print(f"🔑 {channel} token OK")
         return 0
 
     _emit_error(
@@ -96,10 +111,9 @@ def check_messaging_health() -> int:
         result["status"],
         message=result.get("message", ""),
     )
-    print(
+    _print(
         f"🔑 {channel} token ERROR (status={result['status']}"
-        f"{', ' + result['message'] if result.get('message') else ''})",
-        flush=True,
+        f"{', ' + result['message'] if result.get('message') else ''})"
     )
     return 1
 
@@ -112,7 +126,7 @@ def check_github_health() -> int:
     """
     result = check_github_token()
     if result["status"] == "ok":
-        print("🔑 GitHub token OK", flush=True)
+        _print("🔑 GitHub token OK")
         return 0
 
     if result["status"] == "missing":
@@ -123,7 +137,7 @@ def check_github_health() -> int:
             f"{', ' + result['message'] if result.get('message') else ''})",
         )
 
-    print(status_message, flush=True)
+    _print(status_message)
     _emit_error(
         "ninja github health", status_message, message=result.get("message", "")
     )
@@ -137,6 +151,9 @@ def check_litellm_health() -> int:
     validates the API key (401/403 on a bad/expired key) and confirms
     connectivity, without invoking a model or consuming any tokens. Returns 1 on
     error, 0 on success.
+
+    Transient 5xx responses (500, 502, 503, 504) are retried up to 3 times
+    with exponential backoff (1s, 2s, 4s) before reporting a failure.
     """
     cfg = get_config()
     api_key = cfg.get("api_key")
@@ -146,10 +163,7 @@ def check_litellm_health() -> int:
         error_message = (
             "LiteLLM not configured (missing api_key/base_url in settings.json)"
         )
-        print(
-            error_message,
-            flush=True,
-        )
+        _print(error_message)
         _emit_error("ninja litellm health", error_message, message=error_message)
         return 1
 
@@ -159,23 +173,41 @@ def check_litellm_health() -> int:
         method="GET",
     )
 
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            status = (
-                "ok"
-                if resp.status < 300 or resp.status == 402  # 402 means payment required
-                else f"http_{resp.status}"
-            )
-    except urllib.error.HTTPError as e:
-        status = f"http_{e.code}"
-    except Exception as e:
-        status = str(e)[:120]
+    status = "unknown"
+    for attempt in range(1, _DEFAULT_MAX_RETRIES + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                status = (
+                    "ok"
+                    if resp.status < 300
+                    or resp.status == 402  # 402 means payment required
+                    else f"http_{resp.status}"
+                )
+        except urllib.error.HTTPError as e:
+            status = f"http_{e.code}"
+        except Exception as e:
+            status = str(e)[:120]
+
+        if status == "ok":
+            break
+
+        # Retry on transient 5xx codes
+        try:
+            code = int(status.split("_")[1]) if status.startswith("http_") else None
+        except (IndexError, ValueError):
+            code = None
+
+        if code in RETRIABLE_5XX and attempt < _DEFAULT_MAX_RETRIES:
+            time.sleep(_DEFAULT_BACKOFF_BASE * (2 ** (attempt - 1)))
+            continue
+
+        break
 
     if status == "ok":
-        print("🤖 LiteLLM OK", flush=True)
+        _print("🤖 LiteLLM OK")
         return 0
     _emit_error("ninja litellm health", status, message=status)
-    print(f"🤖 LiteLLM ERROR (status={status})", flush=True)
+    _print(f"🤖 LiteLLM ERROR (status={status})")
     return 1
 
 
@@ -189,12 +221,12 @@ def check_pipedream_health() -> int:
     try:
         pdx = PipedreamClient()
         pdx.check_health()
-        print("🔌 Pipedream OK", flush=True)
+        _print("🔌 Pipedream OK")
         return 0
     except Exception as e:
         err = str(e)[:120]
         _emit_error("ninja pipedream health", "error", message=err)
-        print(f"🔌 Pipedream ERROR ({err})", flush=True)
+        _print(f"🔌 Pipedream ERROR ({err})")
         return 1
 
 
@@ -224,24 +256,24 @@ def check_vpn_health() -> int:
             pass
     except OSError as e:
         _emit_error("ninja vpn health", "VPN proxy_down", message=str(e)[:120])
-        print(f"VPN ERROR (proxy {PSIPHON_PROXY} not listening: {e})", flush=True)
+        _print(f"VPN ERROR (proxy {PSIPHON_PROXY} not listening: {e})")
         return 1
 
     proxied_ip = _fetch_egress_ip(PSIPHON_PROXY)
     if not proxied_ip:
         error_message = "VPN ERROR (proxy up but no route to internet)"
         _emit_error("ninja vpn health", error_message, message=error_message)
-        print(error_message, flush=True)
+        _print(error_message)
         return 1
 
     direct_ip = _fetch_egress_ip(None)
     if direct_ip and direct_ip == proxied_ip:
         error_message = "VPN ERROR (egress IP == direct IP; not tunneling)"
         _emit_error("ninja vpn health", error_message, message=error_message)
-        print(error_message, flush=True)
+        _print(error_message)
         return 1
 
-    print("🛡️ VPN OK", flush=True)
+    _print("🛡️ VPN OK")
     return 0
 
 
@@ -259,10 +291,7 @@ def check_monitor_health() -> int:
         _emit_error(
             "ninja monitor health", "Monitor heartbeat missing", message=str(e)[:120]
         )
-        print(
-            f"📡 Monitor heartbeat missing ({MONITOR_HEARTBEAT_FILE}: {e})",
-            flush=True,
-        )
+        _print(f"📡 Monitor heartbeat missing ({MONITOR_HEARTBEAT_FILE}: {e})")
         return 1
 
     age_seconds = int(time.time()) - last_run_ts
@@ -270,14 +299,13 @@ def check_monitor_health() -> int:
         _emit_error(
             "ninja monitor health", "Monitor heartbeat stale", age_seconds=age_seconds
         )
-        print(
+        _print(
             f"📡 Monitor heartbeat STALE "
-            f"(age={age_seconds}s > {MONITOR_STALE_AFTER}s)",
-            flush=True,
+            f"(age={age_seconds}s > {MONITOR_STALE_AFTER}s)"
         )
         return 1
 
-    print(f"📡 Monitor heartbeat OK (age={age_seconds}s)", flush=True)
+    _print(f"📡 Monitor heartbeat OK (age={age_seconds}s)")
     return 0
 
 
@@ -315,7 +343,7 @@ def main():
             try:
                 return check()
             except Exception as e:  # noqa: BLE001 — a crashed check is a failed check
-                print(f"⚠️ {check.__name__} crashed: {e}", flush=True)
+                _print(f"⚠️ {check.__name__} crashed: {e}")
                 return 1
 
         results = {
@@ -331,13 +359,12 @@ def main():
             try:
                 Path(args.status_file).write_text(json.dumps(results))
             except OSError as e:
-                print(f"⚠️ could not write status file: {e}", flush=True)
+                _print(f"⚠️ could not write status file: {e}")
         sys.exit(sum(1 for v in results.values() if v))
 
-    print(
+    _print(
         f"🏥 Health service started — checking {channel}, GitHub, LiteLLM, "
-        f"Pipedream, VPN and monitor every {args.interval // 60} min",
-        flush=True,
+        f"Pipedream, VPN and monitor every {args.interval // 60} min"
     )
 
     checks = (
@@ -355,11 +382,11 @@ def main():
                 try:
                     check()
                 except Exception as e:
-                    print(f"⚠️ {name} health check crashed: {e}", flush=True)
+                    _print(f"⚠️ {name} health check crashed: {e}")
             write_health_heartbeat()
             time.sleep(args.interval)
     except KeyboardInterrupt:
-        print("\n👋 Health service stopped", flush=True)
+        _print("👋 Health service stopped")
 
 
 if __name__ == "__main__":

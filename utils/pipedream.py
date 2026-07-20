@@ -108,18 +108,65 @@ def _get_unique_channel() -> str:
     return get_messaging_interface().get_unique_channel()
 
 
+def _unwrap_envelope(response: dict) -> Any:
+    """Unwrap the gateway's MCP-style envelope.
+
+    The integrations gateway wraps payloads in an MCP-style envelope::
+
+        {"content": [{"type": "text", "text": "<json>"}], ...}
+
+    where the inner ``text`` value is a JSON string containing the real data.
+    Per MCP spec, ``content`` may contain multiple items; this helper
+    concatenates all ``type: "text"`` entries before parsing.
+    Flat dict responses (no ``content`` list) pass through unchanged, so this
+    helper is safe to call unconditionally.
+    """
+    if not isinstance(response, dict):
+        return response
+    content = response.get("content")
+    if not isinstance(content, list) or not content:
+        return response
+    # Collect all text blocks from the MCP content array.
+    text_parts = [
+        item["text"]
+        for item in content
+        if isinstance(item, dict) and item.get("type") == "text" and "text" in item
+    ]
+    if not text_parts:
+        return response
+    combined = "".join(text_parts)
+    try:
+        return json.loads(combined)
+    except (TypeError, ValueError):
+        return combined
+
+
+def _extract_list(data: Any, key: str) -> list:
+    """Return a list from *data*, which may be a bare list or a dict with *key*.
+
+    After MCP envelope unwrapping the payload is either a list directly
+    (e.g. ``[{...}, ...]``) or a dict containing the list under *key*
+    (e.g. ``{"apps": [...]}``) for flat gateway responses.
+    """
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        return data.get(key, [])
+    return []
+
+
 def _http_post(url: str, headers: dict, body: dict) -> dict:
     """
     POST JSON body to url with headers.
 
-    Returns the parsed JSON response dict.
+    Returns the parsed and unwrapped JSON response dict.
     Raises PipedreamError for HTTP 4xx/5xx responses.
     """
     data = json.dumps(body).encode()
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req) as resp:
-            return json.loads(resp.read())
+            return _unwrap_envelope(json.loads(resp.read()))
     except urllib.error.HTTPError as exc:
         body_text = exc.read().decode(errors="replace")
         raise PipedreamError(exc.code, body_text) from exc
@@ -129,12 +176,12 @@ def _http_get(url: str) -> dict:
     """
     GET url with no auth headers.
 
-    Returns the parsed JSON response dict.
+    Returns the parsed and unwrapped JSON response dict.
     Raises PipedreamError for HTTP 4xx/5xx responses.
     """
     try:
         with urllib.request.urlopen(url) as resp:
-            return json.loads(resp.read())
+            return _unwrap_envelope(json.loads(resp.read()))
     except urllib.error.HTTPError as exc:
         body_text = exc.read().decode(errors="replace")
         raise PipedreamError(exc.code, body_text) from exc
@@ -144,13 +191,13 @@ def _http_get_authed(url: str, headers: dict) -> dict:
     """
     GET url with auth headers.
 
-    Returns the parsed JSON response dict.
+    Returns the parsed and unwrapped JSON response dict.
     Raises PipedreamError for HTTP 4xx/5xx responses.
     """
     req = urllib.request.Request(url, headers=headers, method="GET")
     try:
         with urllib.request.urlopen(req) as resp:
-            return json.loads(resp.read())
+            return _unwrap_envelope(json.loads(resp.read()))
     except urllib.error.HTTPError as exc:
         body_text = exc.read().decode(errors="replace")
         raise PipedreamError(exc.code, body_text) from exc
@@ -340,8 +387,7 @@ class PipedreamClient:
         """
         url = f"{self._base_url}{_ACCOUNTS_PATH}"
         headers = self._base_headers()
-        response = _http_get_authed(url, headers)
-        return response.get("accounts", [])
+        return _extract_list(_http_get_authed(url, headers), "accounts")
 
     def list_apps(
         self,
@@ -378,8 +424,7 @@ class PipedreamClient:
         query_string = urllib.parse.urlencode(params)
         url = f"{self._base_url}{_APPS_PATH}?{query_string}"
         headers = self._base_headers()
-        response = _http_get_authed(url, headers)
-        return response.get("apps", [])
+        return _extract_list(_http_get_authed(url, headers), "apps")
 
     def list_actions(
         self,
@@ -420,8 +465,7 @@ class PipedreamClient:
         query_string = urllib.parse.urlencode(params)
         url = f"{self._base_url}{_LIST_ACTIONS_PATH}?{query_string}"
         headers = self._base_headers()
-        response = _http_get_authed(url, headers)
-        return response.get("actions", [])
+        return _extract_list(_http_get_authed(url, headers), "actions")
 
     def describe_action(
         self,
