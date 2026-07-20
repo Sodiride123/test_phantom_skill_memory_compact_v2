@@ -1,6 +1,6 @@
 {
-  "last_collected": "2026-07-17T02:37:49Z",
-  "generated_at": "2026-07-17T02:37:49.971416+00:00",
+  "last_collected": "2026-07-20T09:02:37Z",
+  "generated_at": "2026-07-20T09:02:37.844667+00:00",
   "currency": "USD",
   "price_unit": "per 1,000,000 tokens",
   "provider_count": 6,
@@ -776,7 +776,7 @@
       "name": "Grok 4.5",
       "family": "Grok 4.5",
       "input_price": 2.0,
-      "cached_price": 0.5,
+      "cached_price": 0.3,
       "output_price": 6.0,
       "price_unit": "USD per 1M tokens",
       "context_window": 500000,
@@ -805,9 +805,9 @@
       "provider": "xAI",
       "name": "Grok 4",
       "family": "Grok 4",
-      "input_price": 2.0,
-      "cached_price": 0.5,
-      "output_price": 6.0,
+      "input_price": 3.0,
+      "cached_price": 0.75,
+      "output_price": 15.0,
       "price_unit": "USD per 1M tokens",
       "context_window": 256000,
       "modalities": [
@@ -820,15 +820,15 @@
         "coding"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": false
+      "price_stale": true
     },
     {
       "provider": "xAI",
@@ -930,15 +930,15 @@
         "general"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": false
+      "price_stale": true
     },
     {
       "provider": "Mistral",
@@ -958,15 +958,15 @@
         "cheap"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": false
+      "price_stale": true
     },
     {
       "provider": "Mistral",
@@ -985,15 +985,15 @@
         "cheap"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": false
+      "price_stale": true
     },
     {
       "provider": "Mistral",
@@ -1012,15 +1012,15 @@
         "cheap"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": false
+      "price_stale": true
     },
     {
       "provider": "Mistral",
@@ -1040,15 +1040,15 @@
         "cheap"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": false
+      "price_stale": true
     },
     {
       "provider": "Mistral",
@@ -1067,15 +1067,15 @@
         "cheap"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": false
+      "price_stale": true
     },
     {
       "provider": "Mistral",
@@ -1096,15 +1096,15 @@
         "coding"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": false
+      "price_stale": true
     },
     {
       "provider": "Mistral",
@@ -1125,15 +1125,15 @@
         "multimodal"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": false
+      "price_stale": true
     },
     {
       "provider": "DeepSeek",
@@ -1197,19 +1197,29 @@
   ],
   "refresh": {
     "method": "Tavily extract (extract_depth=advanced) of aipricing.guru",
-    "scraped_rows": 29,
-    "matched": 30,
-    "stale": 9,
+    "scraped_rows": 36,
+    "matched": 20,
+    "stale": 19,
     "stale_models": [
       "GPT-5.5",
+      "GPT-5.4 Pro",
       "GPT-5.5 Pro",
       "Gemini 3 Pro",
       "Grok 4.1 Fast",
       "Grok 3 Mini",
       "Grok 4.20",
+      "Grok 4",
       "Grok 3",
       "Grok 2 Vision",
-      "Grok Beta"
+      "Grok Beta",
+      "Mistral Small 4",
+      "Devstral Small 2",
+      "Mistral NeMo",
+      "Ministral 14B",
+      "Magistral Small",
+      "Mixtral 8x7B",
+      "Mistral Medium 3.5",
+      "Pixtral Large"
     ]
   },
   "official_refresh": {
@@ -1323,24 +1333,26 @@
     "drift_threshold_pct": 25.0,
     "drift": [
       {
-        "model": "OpenAI/GPT-5.4 Pro",
-        "field": "input_price",
-        "from": 2.5,
-        "to": 30.0,
-        "pct": 1100.0,
-        "prev_provenance": "aggregator"
-      },
-      {
-        "model": "OpenAI/GPT-5.4 Pro",
-        "field": "output_price",
-        "from": 15.0,
-        "to": 180.0,
-        "pct": 1100.0,
+        "model": "xAI/Grok 4.5",
+        "field": "cached_price",
+        "from": 0.5,
+        "to": 0.3,
+        "pct": 40.0,
         "prev_provenance": "aggregator"
       }
     ],
-    "drift_vs_previous_run": [],
-    "history_compared_to": "2026-07-16T17:01:21Z",
+    "drift_vs_previous_run": [
+      {
+        "model": "xAI/Grok 4.5",
+        "field": "cached_price",
+        "from": 0.5,
+        "to": 0.3,
+        "pct": 40.0,
+        "tier": "official",
+        "vs": "2026-07-17T02:37:49Z"
+      }
+    ],
+    "history_compared_to": "2026-07-17T02:37:49Z",
     "not_scraped": {
       "Mistral": "mistral.ai/pricing lists subscription plans only, not API token prices \u2014 kept on aggregator/fallback"
     }
