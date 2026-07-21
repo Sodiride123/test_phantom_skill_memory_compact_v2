@@ -75,6 +75,7 @@ from constants import (
 )
 from core.metadata import load_ph_metadata, load_sandbox_metadata
 from messaging import get_messaging_interface
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -89,6 +90,25 @@ _RUN_ACTION_PATH = "/ninja/integrations-gateway/actions/run"
 _LIST_ACTIONS_PATH = "/ninja/integrations-gateway/actions"
 _DESCRIBE_ACTION_PATH = "/ninja/integrations-gateway/actions/describe"
 
+
+# ---------------------------------------------------------------------------
+# Retry helpers
+# ---------------------------------------------------------------------------
+
+_RETRIABLE_5XX = frozenset({500, 502, 503, 504})
+
+
+def _is_retriable(exc: BaseException) -> bool:
+    """Retry only on transient 5xx PipedreamErrors; fail fast on 4xx."""
+    return isinstance(exc, PipedreamError) and exc.status_code in _RETRIABLE_5XX
+
+
+_retry = retry(
+    retry=retry_if_exception(_is_retriable),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, max=4),
+    reraise=True,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -172,12 +192,16 @@ def _http_post(url: str, headers: dict, body: dict) -> dict:
         raise PipedreamError(exc.code, body_text) from exc
 
 
+@_retry
 def _http_get(url: str) -> dict:
     """
     GET url with no auth headers.
 
     Returns the parsed and unwrapped JSON response dict.
     Raises PipedreamError for HTTP 4xx/5xx responses.
+
+    Transient 5xx responses (500, 502, 503, 504) are retried up to 3 times
+    with exponential backoff before re-raising.
     """
     try:
         with urllib.request.urlopen(url) as resp:
@@ -187,12 +211,16 @@ def _http_get(url: str) -> dict:
         raise PipedreamError(exc.code, body_text) from exc
 
 
+@_retry
 def _http_get_authed(url: str, headers: dict) -> dict:
     """
     GET url with auth headers.
 
     Returns the parsed and unwrapped JSON response dict.
     Raises PipedreamError for HTTP 4xx/5xx responses.
+
+    Transient 5xx responses (500, 502, 503, 504) are retried up to 3 times
+    with exponential backoff before re-raising.
     """
     req = urllib.request.Request(url, headers=headers, method="GET")
     try:

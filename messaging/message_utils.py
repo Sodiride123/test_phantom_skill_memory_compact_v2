@@ -41,12 +41,17 @@ def is_bot_message(message: Dict[str, Any]) -> bool:
     """True if message was posted by an application (bot), not a user.
 
     Works for both Teams (from_application_id) and Slack (bot_profile).
+    For Teams with delegated tokens, also detects :ninja: emoji signature.
     """
-    # Teams check
+    # Teams check: official app identity
     if message.get("from_application_id"):
         return True
     # Slack check
     if message.get("bot_profile"):
+        return True
+    # Teams delegated token: check for :ninja: emoji signature (bot self-marks)
+    text = message.get("text", "").strip()
+    if text.endswith(":ninja:"):
         return True
     return False
 

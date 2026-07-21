@@ -193,6 +193,39 @@ def save_seen_messages(seen: set) -> None:
         print(f"⚠️ Warning: Could not save seen messages: {e}", file=sys.stderr)
 
 
+# Sent-message IDs — the agent's own posts, persisted so the monitor process can recognize them (say() runs in a different process, so an in-memory set can't).
+# Needed for Teams delegated tokens, which lack a bot identity / from_me flag.
+def load_sent_messages() -> set:
+    """Load IDs of messages this agent has sent."""
+    path = _get_repo_root() / ".teams_sent_messages.json"
+    try:
+        if path.exists():
+            return set(json.loads(path.read_text()).get("sent", []))
+    except Exception:
+        pass
+    return set()
+
+
+def record_sent_message(msg_id: str, keep: int = 500) -> None:
+    """Append a sent message ID to the store, keeping the most recent ``keep``.
+
+    Ordered append (not a set on disk) so the cap drops the oldest, not a random
+    entry. Best-effort — a lost write just falls back to the :ninja: signature.
+    """
+    msg_id = str(msg_id or "")
+    if not msg_id:
+        return
+    path = _get_repo_root() / ".teams_sent_messages.json"
+    try:
+        ids = json.loads(path.read_text()).get("sent", []) if path.exists() else []
+        if msg_id in ids:
+            return
+        ids.append(msg_id)
+        path.write_text(json.dumps({"sent": ids[-keep:]}))
+    except Exception as e:
+        print(f"⚠️ Warning: Could not record sent message: {e}", file=sys.stderr)
+
+
 def load_agent_messages() -> dict:
     """Load agent thread-tracking state from .agent_messages.json."""
     path = _get_repo_root() / ".agent_messages.json"

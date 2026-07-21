@@ -544,11 +544,6 @@
             conflict: '⚠️ Needs review — conflicts held back', disabled: '⏸ Not enabled for this account',
             up_to_date: '✔ Already up to date', error: '❌ Failed', done: 'Done', idle: 'Idle'
         };
-        function _lastLogLine(log) {
-            if (!log) return '';
-            const lines = log.trim().split('\n');
-            return lines[lines.length - 1] || '';
-        }
         async function triggerUpgrade() {
             const btn = document.getElementById('upgradeBtn');
             const st = document.getElementById('upgradeStatus');
@@ -567,9 +562,7 @@
             const st = document.getElementById('upgradeStatus');
             try {
                 const d = await (await fetch('/api/upgrade/status')).json();
-                const label = UPGRADE_LABELS[d.outcome] || 'Done';
-                const tail = _lastLogLine(d.log);
-                st.textContent = tail ? `${label} — ${tail}` : label;
+                st.textContent = UPGRADE_LABELS[d.outcome] || 'Done';
                 if (d.running) { btn.disabled = true; setTimeout(pollUpgradeStatus, 2000); }
                 else { btn.disabled = false; }
             } catch (e) { st.textContent = 'status error: ' + e; btn.disabled = false; }
@@ -601,6 +594,7 @@
         orchEnabledEl.addEventListener('change', onOrchToggleChange);
 
         function renderOrchestrator(enabled, updatedAt) {
+            const orchEnabledEl = document.getElementById('orchEnabled');
             orchEnabledEl.checked = enabled !== false;
             if (updatedAt !== undefined) {
                 document.getElementById('orchMeta').textContent =
@@ -618,6 +612,7 @@
             // Value the user just selected — this is our optimistic intent.
             const desired = evt.target.checked;
             const previousValue = !desired;
+            const orchEnabledEl = document.getElementById('orchEnabled');
 
             orchSaving = true;
             orchEnabledEl.disabled = true;
@@ -637,22 +632,19 @@
                     // Backend rejected — revert the toggle the user changed.
                     renderOrchestrator(previousValue);
                     setOrchNote('err', '✕ ' + (d.error || 'Save failed'));
+                    console.log('onOrchToggleChange: backend rejected:', d);
                 }
             } catch (e) {
                 // Network error — revert.
-                changed.checked = previousValue;
-                note.className = 'orch-save-note err';
-                note.textContent = '✕ Network error';
+                renderOrchestrator(previousValue);
+                setOrchNote('err', '✕ Network error');
                 console.error('onOrchToggleChange:', e);
             } finally {
                 // Re-enable the toggles ONLY now that the write is confirmed
                 // (or reverted). This is the single point where the grey-out ends.
                 orchSaving = false;
                 orchEnabledEl.disabled = false;
-
-                // One authoritative sync of the read-only status badge/meta.
-                await loadOrchestratorConfig();
-                setTimeout(() => { note.textContent = ''; note.className = 'orch-save-note'; }, 4000);
+                setTimeout(() => setOrchNote(""), 4000);
             }
         }
 
