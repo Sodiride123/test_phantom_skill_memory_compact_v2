@@ -110,6 +110,7 @@ RETRIABLE_5XX = frozenset({500, 502, 503, 504})
 
 _DEFAULT_MAX_RETRIES = 3
 _DEFAULT_BACKOFF_BASE = 1.0  # seconds; delay = base * 2^(attempt-1) → 1s, 2s, 4s
+_DEFAULT_TIMEOUT = 120  # seconds; prevents "read operation timed out" hangs
 
 
 def litellm_request(
@@ -118,6 +119,7 @@ def litellm_request(
     *,
     max_retries: int = _DEFAULT_MAX_RETRIES,
     backoff_base: float = _DEFAULT_BACKOFF_BASE,
+    timeout: float | None = _DEFAULT_TIMEOUT,
     **kwargs,
 ) -> requests.Response:
     """Make an HTTP request to the LiteLLM gateway, retrying on transient 5xx errors.
@@ -127,8 +129,13 @@ def litellm_request(
         path:        Gateway-relative path, e.g. ``"/v1/chat/completions"``.
         max_retries: Total number of attempts (default 3 → up to 2 retries).
         backoff_base: Base delay in seconds; doubles each attempt (1s, 2s, 4s).
+        timeout:     Seconds to wait for a response (default 120). Pass ``None``
+                     to disable the timeout. Without this default, slow or
+                     unresponsive gateway requests hang indefinitely and surface
+                     as "The read operation timed out" errors.
         **kwargs:    Forwarded verbatim to :func:`requests.request` (``json``,
-                     ``data``, ``files``, ``headers``, ``timeout``, …).
+                     ``data``, ``files``, ``headers``, …). Do not pass
+                     ``timeout`` in kwargs; use the explicit parameter instead.
 
     Returns:
         The :class:`requests.Response` from the first successful (non-5xx) attempt
@@ -149,7 +156,7 @@ def litellm_request(
     last_response: requests.Response | None = None
 
     for attempt in range(1, max_retries + 1):
-        last_response = requests.request(method, url, **kwargs)
+        last_response = requests.request(method, url, timeout=timeout, **kwargs)
 
         if last_response.status_code not in RETRIABLE_5XX:
             return last_response

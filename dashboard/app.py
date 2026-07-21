@@ -836,7 +836,7 @@ def api_set_orchestrator_config():
                 text=True,
                 timeout=30,
             )
-        return jsonify({"ok": True, "config": saved})
+        return jsonify({"enabled": saved["enabled"], "ok": True, "config": saved})
     except Exception as e:
         print(f"⚠️ Could not save orchestrator config: {e}", file=sys.stderr)
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -953,15 +953,16 @@ def api_upgrade():
 
 @app.route("/api/upgrade/status")
 def api_upgrade_status():
-    """Report whether an upgrade is running, the classified outcome, and a log tail."""
+    """Report whether an upgrade is running and its classified outcome."""
     running = _upgrade_running()
-    tail = ""
+    if running:
+        return jsonify({"running": True, "outcome": "running"})
     try:
         tail = "\n".join(UPGRADE_LOG.read_text(errors="replace").splitlines()[-40:])
     except OSError:
-        pass
-    outcome = "running" if running else (_upgrade_outcome(tail) if tail else "idle")
-    return jsonify({"running": running, "outcome": outcome, "log": tail})
+        tail = ""
+    outcome = _upgrade_outcome(tail) if tail else "idle"
+    return jsonify({"running": False, "outcome": outcome})
 
 
 @app.route("/api/upgrade/enabled")

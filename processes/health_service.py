@@ -152,8 +152,9 @@ def check_litellm_health() -> int:
     connectivity, without invoking a model or consuming any tokens. Returns 1 on
     error, 0 on success.
 
-    Transient 5xx responses (500, 502, 503, 504) are retried up to 3 times
-    with exponential backoff (1s, 2s, 4s) before reporting a failure.
+    Transient 5xx responses (500, 502, 503, 504) and read timeouts are retried
+    up to 3 times with exponential backoff (1s, 2s, 4s) before reporting a
+    failure. Each attempt allows up to 30 seconds for a response.
     """
     cfg = get_config()
     api_key = cfg.get("api_key")
@@ -174,9 +175,11 @@ def check_litellm_health() -> int:
     )
 
     status = "unknown"
+    timed_out = False
     for attempt in range(1, _DEFAULT_MAX_RETRIES + 1):
+        timed_out = False
         try:
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:
                 status = (
                     "ok"
                     if resp.status < 300
@@ -185,19 +188,22 @@ def check_litellm_health() -> int:
                 )
         except urllib.error.HTTPError as e:
             status = f"http_{e.code}"
+        except (socket.timeout, TimeoutError) as e:
+            status = str(e)[:120]
+            timed_out = True
         except Exception as e:
             status = str(e)[:120]
 
         if status == "ok":
             break
 
-        # Retry on transient 5xx codes
+        # Retry on transient 5xx codes or timeouts
         try:
             code = int(status.split("_")[1]) if status.startswith("http_") else None
         except (IndexError, ValueError):
             code = None
 
-        if code in RETRIABLE_5XX and attempt < _DEFAULT_MAX_RETRIES:
+        if (timed_out or code in RETRIABLE_5XX) and attempt < _DEFAULT_MAX_RETRIES:
             time.sleep(_DEFAULT_BACKOFF_BASE * (2 ** (attempt - 1)))
             continue
 
@@ -217,10 +223,12 @@ def check_pipedream_health() -> int:
     GETs /ninja/integrations-gateway/health — a lightweight endpoint that
     requires no auth and has no side effects.
     Returns 1 on error, 0 on success.
+
+    Transient 5xx responses (500, 502, 503, 504) are retried automatically
+    by PipedreamClient (via tenacity) before the exception propagates here.
     """
     try:
-        pdx = PipedreamClient()
-        pdx.check_health()
+        PipedreamClient().check_health()
         _print("🔌 Pipedream OK")
         return 0
     except Exception as e:

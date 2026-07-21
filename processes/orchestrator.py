@@ -947,12 +947,11 @@ def run_agent(
                 [
                     str(REPO_ROOT / "claude-wrapper.sh"),
                     *session_args,
-                    "-p",
-                    prompt,
                     "--system-prompt-file",
                     f"{SYSTEM_PROMPT_PATH_ORCHESTRATOR}",
                     "--tools",
                     "Bash,Edit,Read,Skill,Write",
+                    "-p",
                 ],
                 cwd=str(REPO_ROOT),
                 timeout=timeout,
@@ -962,7 +961,7 @@ def run_agent(
             )
         else:
             result = subprocess.run(
-                [str(REPO_ROOT / "claude-wrapper.sh"), *session_args, "-p", prompt],
+                [str(REPO_ROOT / "claude-wrapper.sh"), *session_args, "-p"],
                 cwd=str(REPO_ROOT),
                 timeout=timeout,
                 capture_output=True,

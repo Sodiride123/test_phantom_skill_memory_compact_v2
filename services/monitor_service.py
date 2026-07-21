@@ -344,12 +344,11 @@ def run_batched_response(
                 [
                     str(_REPO_ROOT / "claude-wrapper.sh"),
                     *session_args,
-                    "-p",
-                    prompt,
                     "--system-prompt-file",
                     f"{system_prompt_path}",
                     "--tools",
                     "Bash,Edit,Read,Skill,Write",
+                    "-p",
                 ],
                 cwd=str(_REPO_ROOT),
                 capture_output=True,
@@ -359,7 +358,7 @@ def run_batched_response(
             )
         else:
             result = subprocess.run(
-                [str(_REPO_ROOT / "claude-wrapper.sh"), *session_args, "-p", prompt],
+                [str(_REPO_ROOT / "claude-wrapper.sh"), *session_args, "-p"],
                 cwd=str(_REPO_ROOT),
                 capture_output=True,
                 text=True,
