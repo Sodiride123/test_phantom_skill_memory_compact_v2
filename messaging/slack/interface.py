@@ -3683,7 +3683,7 @@ class SlackInterface(MessagingInterface):
         logger.info(f"Agent messages state: {agent}")
         if agent.get("welcomed"):
             logger.info(
-                f"Agent {agent.get('name')} already welcomed in this channel; skipping welcome announcement."
+                f"Agent already welcomed in this channel; skipping welcome announcement."
             )
             return False
 
@@ -3709,6 +3709,7 @@ class SlackInterface(MessagingInterface):
             self.say(welcome_text)
             agent["welcomed"] = True
             save_agent_messages(agent)
+            self.capture_welcome_message("slack")
             return True
         except Exception as e:
             import sys as _sys
