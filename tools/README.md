@@ -13,6 +13,7 @@ Reusable utility tools for the Ninja browser automation agent. Each tool works b
 | `stealth_audit.py` | Browser stealth verification | `python tools/stealth_audit.py` |
 | `session_manager.py` | Save/restore browser sessions | `python tools/session_manager.py list` |
 | `message_sanitizer.py` | Strip LLM artifacts from text | `python tools/message_sanitizer.py "text"` |
+| `doc_to_pdf.py` | Convert HTML/DOCX to PDF (+ preview PNG) via the browser, no LibreOffice | `python tools/doc_to_pdf.py cv.docx --out cv.pdf --png preview.png` |
 
 `pdx.py` is installed as `/usr/local/bin/pdx` by `install.sh`; see `agent-docs/PIPEDREAM_CONNECT.md`.
 
@@ -55,6 +56,10 @@ python tools/session_manager.py restore my_session
 
 # Sanitize text
 python tools/message_sanitizer.py "Here's some text with 🚀 emojis — and fancy punctuation!!!"
+
+# Convert a document to PDF + preview (no LibreOffice needed)
+python tools/doc_to_pdf.py reports/cv.html
+python tools/doc_to_pdf.py reports/cv.docx --out cv.pdf --png cv_preview.png
 
 # Issue work queue (agent loop — see agent-docs/LOOP.md)
 python tools/issues.py list
