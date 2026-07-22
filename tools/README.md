@@ -14,6 +14,7 @@ Reusable utility tools for the Ninja browser automation agent. Each tool works b
 | `session_manager.py` | Save/restore browser sessions | `python tools/session_manager.py list` |
 | `message_sanitizer.py` | Strip LLM artifacts from text | `python tools/message_sanitizer.py "text"` |
 | `doc_to_pdf.py` | Convert HTML/DOCX to PDF (+ preview PNG) via the browser, no LibreOffice | `python tools/doc_to_pdf.py cv.docx --out cv.pdf --png preview.png` |
+| `profile_lookup.py` | Recover *verifiable* public facts about a person via Tavily snippets (no fabrication; flags common-name ambiguity) | `python tools/profile_lookup.py "Name" --company C --hint Location --slug S` |
 
 `pdx.py` is installed as `/usr/local/bin/pdx` by `install.sh`; see `agent-docs/PIPEDREAM_CONNECT.md`.
 
@@ -60,6 +61,10 @@ python tools/message_sanitizer.py "Here's some text with 🚀 emojis — and fan
 # Convert a document to PDF + preview (no LibreOffice needed)
 python tools/doc_to_pdf.py reports/cv.html
 python tools/doc_to_pdf.py reports/cv.docx --out cv.pdf --png cv_preview.png
+
+# Look up verifiable public facts about a person (Tavily snippets, no fabrication)
+python tools/profile_lookup.py "Yu Yan" --company "NinjaTech AI" --hint Sydney
+python tools/profile_lookup.py "Yu Yan" --slug yu-y-967989179 --json
 
 # Issue work queue (agent loop — see agent-docs/LOOP.md)
 python tools/issues.py list
