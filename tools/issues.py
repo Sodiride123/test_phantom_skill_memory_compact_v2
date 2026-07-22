@@ -18,6 +18,7 @@ See ``agent-docs/LOOP.md`` for the full architecture.
 Examples:
     python tools/issues.py list
     python tools/issues.py list --json
+    python tools/issues.py view 42
     python tools/issues.py count
     python tools/issues.py create --title "Fix X" --body "details" --label ninja
     python tools/issues.py comment 42 --body "progress update"
@@ -134,6 +135,20 @@ def create_issue(title: str, body: str = "", labels: list[str] | None = None) ->
     return proc.stdout.strip()
 
 
+def view_issue(number: int) -> dict:
+    """Return a single issue's full detail (title, body, comments, labels, state)."""
+    proc = _gh(
+        [
+            "issue",
+            "view",
+            str(number),
+            "--json",
+            "number,title,body,state,labels,url,createdAt,comments",
+        ]
+    )
+    return json.loads(proc.stdout or "{}")
+
+
 def comment_issue(number: int, body: str) -> None:
     _gh(["issue", "comment", str(number), "--body", body])
 
@@ -156,6 +171,30 @@ def _cmd_list(a: argparse.Namespace) -> int:
     for it in issues:
         labels = ",".join(lbl["name"] for lbl in it.get("labels", []))
         print(f"#{it['number']:<5} [{it['state']}] {it['title']}  ({labels})")
+    return 0
+
+
+def _cmd_view(a: argparse.Namespace) -> int:
+    issue = view_issue(a.number)
+    if a.json:
+        print(json.dumps(issue, indent=2))
+        return 0
+    if not issue:
+        print(f"Issue #{a.number} not found.")
+        return 1
+    labels = ",".join(lbl["name"] for lbl in issue.get("labels", []))
+    print(f"#{issue['number']} [{issue['state']}] {issue['title']}")
+    if labels:
+        print(f"labels: {labels}")
+    print(f"url: {issue.get('url', '')}")
+    print("\n" + (issue.get("body") or "(no body)"))
+    comments = issue.get("comments") or []
+    if comments:
+        print(f"\n--- {len(comments)} comment(s) ---")
+        for c in comments:
+            author = (c.get("author") or {}).get("login", "?")
+            print(f"\n[{author} @ {c.get('createdAt', '')}]")
+            print(c.get("body", ""))
     return 0
 
 
@@ -212,6 +251,11 @@ def build_parser() -> argparse.ArgumentParser:
     pl.add_argument("--label", default=None, help="Filter by label")
     pl.add_argument("--json", action="store_true", help="Output JSON")
     pl.set_defaults(func=_cmd_list)
+
+    pv = sub.add_parser("view", help="View one issue's full body + comments")
+    pv.add_argument("number", type=int)
+    pv.add_argument("--json", action="store_true", help="Output JSON")
+    pv.set_defaults(func=_cmd_view)
 
     pc = sub.add_parser("count", help="Count open issues")
     pc.add_argument("--label", default=None, help="Filter by label")

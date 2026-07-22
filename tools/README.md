@@ -7,7 +7,7 @@ Reusable utility tools for the Ninja browser automation agent. Each tool works b
 | Tool | Purpose | CLI Usage |
 |------|---------|-----------|
 | `cron.py` | Schedule recurring agent prompts (see `agent-docs/CRON.md`) | `python tools/cron.py add ...`, `list`, `trigger` |
-| `issues.py` | GitHub-issue work queue for the agent loop (see `agent-docs/LOOP.md`) | `python tools/issues.py list`, `count --json`, `create --title ... --body ...`, `comment <n> --body ...`, `close <n> --comment ...` |
+| `issues.py` | GitHub-issue work queue for the agent loop (see `agent-docs/LOOP.md`) | `python tools/issues.py list`, `view <n>`, `count --json`, `create --title ... --body ...`, `comment <n> --body ...`, `close <n> --comment ...` |
 | `health_check.py` | System diagnostics | `python tools/health_check.py` |
 | `log_analyzer.py` | Parse Claude Code JSONL logs | `python tools/log_analyzer.py <logfile>` |
 | `stealth_audit.py` | Browser stealth verification | `python tools/stealth_audit.py` |
@@ -58,6 +58,7 @@ python tools/message_sanitizer.py "Here's some text with 🚀 emojis — and fan
 
 # Issue work queue (agent loop — see agent-docs/LOOP.md)
 python tools/issues.py list
+python tools/issues.py view 42            # full body + comments (no need to shell out to gh)
 python tools/issues.py count --json
 python tools/issues.py create --title "Fix flaky test" --body "details"
 python tools/issues.py close 42 --comment "done in PR #99"
