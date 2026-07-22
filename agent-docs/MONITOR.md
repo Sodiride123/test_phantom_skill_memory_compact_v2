@@ -38,7 +38,7 @@ RULES:
 - Do NOT ask for permission - just do it
 - **Always reply in threads** — use -t <thread_ts> with the thread_ts. Never post a new top-level message as a reply.
 - For status updates, reply to the existing "Sprint N Update" thread — don't create a new one.
-- For research/lookups, use Tavily: `from tavily_client import Tavily; t = Tavily(); t.search("query")`
+- For research/lookups, use Tavily: `from clients.tavily_client import Tavily; t = Tavily(); t.search("query")`
 
 AUDIO/VOICE MESSAGE HANDLING:
 - If a message is marked as "audio_message" type with an audio file URL, you MUST transcribe it first before responding.
