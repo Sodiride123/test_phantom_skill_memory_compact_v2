@@ -6,6 +6,8 @@ from typing import Any, Dict, Optional
 # Set by the monitor when the pending batch has exactly one message, so the
 # say/upload CLI can enforce its thread when the model drops the -t flag.
 FORCE_THREAD_ENV = "NINJA_FORCE_THREAD_TS"
+_NINJA_EMOJI = "\U0001f977"  # 🥷
+_NINJA_SHORTCODE = ":ninja:"
 
 
 def resolve_reply_thread(explicit_thread: Optional[str]) -> Optional[str]:
@@ -51,7 +53,7 @@ def is_bot_message(message: Dict[str, Any]) -> bool:
         return True
     # Teams delegated token: check for :ninja: emoji signature (bot self-marks)
     text = message.get("text", "").strip()
-    if text.endswith(":ninja:"):
+    if _NINJA_EMOJI in text or _NINJA_SHORTCODE in text:
         return True
     return False
 

@@ -68,8 +68,9 @@ def _print(msg: str) -> None:
 
 # Liveness heartbeat for this service: overwritten with the current unix
 # timestamp at the end of every check cycle. Mirrors MONITOR_HEARTBEAT_FILE so
-# an external watcher can detect a stalled health service. Lives in /tmp.
-HEALTH_HEARTBEAT_FILE = Path("/tmp/ninja_health_heartbeat")
+# an external watcher can detect a stalled health service.
+# /workspace/logs (not /tmp) — /tmp is lost on every 25-min Firecracker VM cycle.
+HEALTH_HEARTBEAT_FILE = Path("/workspace/logs/ninja_health_heartbeat")
 
 
 def write_health_heartbeat() -> None:
@@ -79,6 +80,7 @@ def write_health_heartbeat() -> None:
     detect a stalled health service. Best-effort — never raises.
     """
     try:
+        HEALTH_HEARTBEAT_FILE.parent.mkdir(parents=True, exist_ok=True)
         HEALTH_HEARTBEAT_FILE.write_text(str(int(time.time())))
     except OSError:
         pass
@@ -354,13 +356,16 @@ def main():
                 _print(f"⚠️ {check.__name__} crashed: {e}")
                 return 1
 
+        # Monitor heartbeat is excluded from --once mode. The upgrade smoke check
+        # calls --once immediately after restarting services, before the monitor
+        # has had time to write its first heartbeat (ninja-upgrade.sh documents
+        # this). The 15-minute interval loop below performs this check instead.
         results = {
             "messaging": _safe(check_messaging_health),
             "github": _safe(check_github_health),
             "litellm": _safe(check_litellm_health),
             "pipedream": _safe(check_pipedream_health),
             "vpn": _safe(check_vpn_health),
-            "monitor": _safe(check_monitor_health),
         }
         write_health_heartbeat()
         if args.status_file:

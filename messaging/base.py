@@ -12,12 +12,26 @@ internal implementation detail of each adapter — not part of this contract.
 
 from __future__ import annotations
 
+import sys
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
+
+from clients.posthog_client import capture
+from clients.super_ninja_client import get_thread_id
 
 
 class MessagingInterface(ABC):
     """Abstract base class for all messaging channel adapters."""
+
+    def capture_welcome_message(self, channel: str) -> None:
+        """Emit the ninja_welcome_message PostHog event; never raises."""
+        try:
+            capture(
+                "ninja_welcome_message",
+                {"channel": channel, "thread_id": get_thread_id()},
+            )
+        except Exception:
+            print("⚠️ Failed to capture welcome message event", file=sys.stderr)
 
     # ------------------------------------------------------------------
     # Connection / health
@@ -154,6 +168,21 @@ class MessagingInterface(ABC):
         Returns:
             True if the message was actually posted this call, False otherwise.
         """
+
+    def prime_seen_state(self, seen_messages: set, agent_data: dict) -> None:
+        """Cold-start baseline: mark existing channel history as already handled.
+
+        Called once by the monitor when persisted state is empty (fresh install
+        or a sandbox reclone that wiped the local stores). Populating
+        ``seen_messages``/``agent_data`` from current history here means the
+        monitor answers only messages that arrive *after* startup, instead of
+        re-acking and re-answering the whole backlog on every cold restart.
+
+        Default is a no-op; adapters that need it (e.g. Teams, whose delegated
+        token makes the agent's own posts indistinguishable from human ones once
+        the sent-id store is gone) override this. Mutates both args in place.
+        """
+        return
 
     # ------------------------------------------------------------------
     # Health service integration

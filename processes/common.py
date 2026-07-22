@@ -33,7 +33,8 @@ import time
 from pathlib import Path
 
 from agents_config import AGENTS
-from clients.posthog_client import capture
+from clients.posthog_client import capture, is_feature_enabled
+from constants import WELCOME_FEATURE_FLAG
 from core.config import (
     install_sighup_handler,
     is_orchestrator_enabled,
@@ -74,8 +75,8 @@ BACKOFF_MULTIPLIER = 2
 
 # Liveness heartbeat — overwritten with the current unix timestamp on every poll
 # tick. processes/health_service.py reads it to surface monitor liveness to PostHog.
-# Lives in /tmp (sandbox-local), mirroring the orchestrator's heartbeat file.
-MONITOR_HEARTBEAT_FILE = Path("/tmp/ninja_monitor_heartbeat")
+# /workspace/logs (not /tmp) — /tmp is lost on every 25-min Firecracker VM cycle.
+MONITOR_HEARTBEAT_FILE = Path("/workspace/logs/ninja_monitor_heartbeat")
 
 # How often the monitor checks the gh session against the rotated mcp-token.
 # Infra rotates /dev/shm/mcp-token, but gh's hosts.yml only gets a copy at
@@ -147,6 +148,7 @@ def write_monitor_heartbeat() -> None:
     Best-effort — never raises.
     """
     try:
+        MONITOR_HEARTBEAT_FILE.parent.mkdir(parents=True, exist_ok=True)
         MONITOR_HEARTBEAT_FILE.write_text(str(int(time.time())))
     except OSError:
         pass
@@ -312,13 +314,26 @@ class PollingMonitorStrategy(MonitorStrategy):
         iface = get_messaging_interface()
         seen_messages = load_seen_messages()
         agent_data = load_agent_messages()
+
+        # Cold start (fresh install or a reclone that wiped local state): baseline the current channel history so we don't re-ack/re-answer the whole
+        # backlog. Only messages arriving after startup are processed.
+        if not seen_messages:
+            iface.prime_seen_state(seen_messages, agent_data)
+            save_seen_messages(seen_messages)
+            save_agent_messages(agent_data)
+
         start_time = time.time()
         last_heartbeat = 0.0
         last_gh_sync_check = 0.0
 
-        iface.post_welcome_if_needed(
-            agent, build_welcome_message(agent), build_welcome_signature(agent)
-        )
+        # Pre-populate the heartbeat before post_welcome_if_needed so the
+        # health service doesn't false-alarm on the first check after startup.
+        write_monitor_heartbeat()
+
+        if is_feature_enabled(WELCOME_FEATURE_FLAG):
+            iface.post_welcome_if_needed(
+                agent_data, build_welcome_message(agent), build_welcome_signature(agent)
+            )
 
         print(
             f"\U0001f4e1 Starting monitor loop (max {MAX_RUNTIME // 60} minutes)...",
