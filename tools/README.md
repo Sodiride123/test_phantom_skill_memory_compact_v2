@@ -7,14 +7,12 @@ Reusable utility tools for the Ninja browser automation agent. Each tool works b
 | Tool | Purpose | CLI Usage |
 |------|---------|-----------|
 | `cron.py` | Schedule recurring agent prompts (see `agent-docs/CRON.md`) | `python tools/cron.py add ...`, `list`, `trigger` |
-| `issues.py` | GitHub-issue work queue for the agent loop (see `agent-docs/LOOP.md`) | `python tools/issues.py list`, `view <n>`, `count --json`, `create --title ... --body ...`, `comment <n> --body ...`, `close <n> --comment ...` |
+| `issues.py` | GitHub-issue work queue for the agent loop (see `agent-docs/LOOP.md`) | `python tools/issues.py list`, `count --json`, `create --title ... --body ...`, `comment <n> --body ...`, `close <n> --comment ...` |
 | `health_check.py` | System diagnostics | `python tools/health_check.py` |
 | `log_analyzer.py` | Parse Claude Code JSONL logs | `python tools/log_analyzer.py <logfile>` |
 | `stealth_audit.py` | Browser stealth verification | `python tools/stealth_audit.py` |
 | `session_manager.py` | Save/restore browser sessions | `python tools/session_manager.py list` |
 | `message_sanitizer.py` | Strip LLM artifacts from text | `python tools/message_sanitizer.py "text"` |
-| `doc_to_pdf.py` | Convert HTML/DOCX to PDF (+ preview PNG) via the browser, no LibreOffice | `python tools/doc_to_pdf.py cv.docx --out cv.pdf --png preview.png` |
-| `profile_lookup.py` | Recover *verifiable* public facts about a person via Tavily snippets (no fabrication; flags common-name ambiguity) | `python tools/profile_lookup.py "Name" --company C --hint Location --slug S` |
 
 `pdx.py` is installed as `/usr/local/bin/pdx` by `install.sh`; see `agent-docs/PIPEDREAM_CONNECT.md`.
 
@@ -58,17 +56,8 @@ python tools/session_manager.py restore my_session
 # Sanitize text
 python tools/message_sanitizer.py "Here's some text with 🚀 emojis — and fancy punctuation!!!"
 
-# Convert a document to PDF + preview (no LibreOffice needed)
-python tools/doc_to_pdf.py reports/cv.html
-python tools/doc_to_pdf.py reports/cv.docx --out cv.pdf --png cv_preview.png
-
-# Look up verifiable public facts about a person (Tavily snippets, no fabrication)
-python tools/profile_lookup.py "Yu Yan" --company "NinjaTech AI" --hint Sydney
-python tools/profile_lookup.py "Yu Yan" --slug yu-y-967989179 --json
-
 # Issue work queue (agent loop — see agent-docs/LOOP.md)
 python tools/issues.py list
-python tools/issues.py view 42            # full body + comments (no need to shell out to gh)
 python tools/issues.py count --json
 python tools/issues.py create --title "Fix flaky test" --body "details"
 python tools/issues.py close 42 --comment "done in PR #99"
