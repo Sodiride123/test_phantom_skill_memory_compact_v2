@@ -24,7 +24,6 @@
 #   NINJA_LLM_RESOLVE_CMD (claude-wrapper.sh)      override conflict resolver
 #   NINJA_FF_OVERRIDE     (query PostHog)          feature-flag override: 1=on, 0=off
 #   NINJA_LOCKFILE        $NINJA_HOME/.ninja-git.lock
-#   NINJA_UPGRADE_HISTORY_LOG /workspace/logs/ninja-upgrade.history.log  durable cross-run log
 
 set -euo pipefail
 
@@ -37,11 +36,6 @@ DO_PUSH="${NINJA_UPGRADE_PUSH:-1}"
 HEALTH_CHECK="${NINJA_HEALTH_CHECK:-1}"     # 0 disables the differential health gate
 UPGRADE_FLAG="${NINJA_UPGRADE_FLAG:-ninja-auto-upgrade}"   # PostHog feature-flag key
 LOCKFILE="${NINJA_LOCKFILE:-$NINJA_HOME/.ninja-git.lock}"
-# Durable, sequential log of every upgrade run (all runs appended), kept so
-# support can request the full history after a failure. Distinct from the
-# per-run STDERR/journal output, which only reflects the current run.
-HISTORY_LOG="${NINJA_UPGRADE_HISTORY_LOG:-/workspace/logs/ninja-upgrade.history.log}"
-HISTORY_MAX_BYTES="${NINJA_UPGRADE_HISTORY_MAX_BYTES:-2000000}"   # ~2MB; oldest trimmed
 GIT_ID=(-c user.name=ninja -c user.email=ninja@ninjatech.ai)
 PRE_HEALTH=""                              # pre-upgrade health snapshot (set in main)
 BASELINE_PREV=""                           # ninja-upstream tip before update_baseline (for rollback)
@@ -72,20 +66,10 @@ _lvl_num() {
     esac
 }
 
-# history_append <text> — append one timestamped line to HISTORY_LOG, the
-# durable cross-run log support can request after a failure. Best-effort: a
-# missing dir or write error never fails the run.
-history_append() {
-    [[ -z "${HISTORY_LOG:-}" ]] && return 0
-    printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*" >> "$HISTORY_LOG" 2>/dev/null || true
-}
-
 _log() { # _log <LEVEL> <message...>
     local level="$1"; shift
     [[ "$(_lvl_num "$level")" -lt "$(_lvl_num "$LOG_LEVEL")" ]] && return 0
-    local msg; msg=$(printf 'ninja-upgrade %-5s %s' "$level" "$*")
-    printf '%s\n' "$msg" >&2       # ephemeral: systemd journal / dashboard tail
-    history_append "$msg"          # durable: cross-run history file
+    printf 'ninja-upgrade %-5s %s\n' "$level" "$*" >&2
 }
 
 log()       { _log INFO  "$@"; }   # default level; existing call sites keep working
@@ -95,9 +79,8 @@ log_debug() { _log DEBUG "$@"; }
 
 # emit_result <outcome> — machine-readable final marker (stdout) the dashboard
 # classifier reads: upgraded | rolled_back | conflict | error | up_to_date |
-# disabled. Keeps the UI/telemetry decoupled from log prose. Also recorded in
-# the durable history log so each past run's outcome is retrievable.
-emit_result() { echo "NINJA_UPGRADE_RESULT=$1"; history_append "RESULT=$1"; }
+# disabled. Keeps the UI/telemetry decoupled from log prose.
+emit_result() { echo "NINJA_UPGRADE_RESULT=$1"; }
 
 # posthog_capture(status, message) — best-effort PostHog event for an upgrade
 # outcome. Emits "ninja upgrade" with error=0 for success, 1 for failure
@@ -107,7 +90,7 @@ posthog_capture() {
     local err=1; [[ "$1" == success ]] && err=0
     ( cd "$NINJA_HOME" && PYTHONPATH="/workspace:$NINJA_HOME" \
         /usr/local/bin/python -c \
-        "import sys; from clients.posthog_client import capture; capture('ninja upgrade', {'error': int(sys.argv[3]), 'status': sys.argv[1], 'version': sys.argv[2], 'message': sys.argv[4]}, sync=True)" \
+        "import sys; from clients.posthog_client import capture; capture('ninja upgrade', {'error': int(sys.argv[3]), 'status': sys.argv[1], 'version': sys.argv[2], 'message': sys.argv[4]})" \
         "$1" "${NEW_VERSION:-unknown}" "$err" "$2" ) >/dev/null 2>&1 || true
 }
 
@@ -569,18 +552,6 @@ finalize() {
 # ---------------------------------------------------------------------------
 main() {
     cd "$NINJA_HOME"
-
-    # --- Durable history log (support artifact) ----------------------------
-    # Ensure the dir exists, bound the file to its most-recent tail, then mark
-    # the run start. All best-effort so it can never block an upgrade.
-    mkdir -p "$(dirname "$HISTORY_LOG")" 2>/dev/null || true
-    if [[ -f "$HISTORY_LOG" ]] \
-       && (( $(wc -c <"$HISTORY_LOG" 2>/dev/null || echo 0) > HISTORY_MAX_BYTES )); then
-        tail -c "$HISTORY_MAX_BYTES" "$HISTORY_LOG" >"$HISTORY_LOG.tmp" 2>/dev/null \
-            && mv "$HISTORY_LOG.tmp" "$HISTORY_LOG"
-    fi
-    history_append "===== upgrade run start (pid $$) ====="
-
     [[ -d .git ]] || { log_error "no repo at $NINJA_HOME"; exit 0; }
 
     # Non-blocking lock shared with ninja-sync — a second tick just exits.
