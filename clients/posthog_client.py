@@ -51,35 +51,9 @@ def get_posthog_client() -> Posthog:
     return Posthog(project_api_key=key, host=host)
 
 
-@cache
-def get_sync_posthog_client() -> Posthog:
-    """Return a cached Posthog client that uploads events synchronously.
-
-    The default (async) client only enqueues events for a background consumer
-    thread that uploads on a ~5s batch interval. Short-lived callers (e.g. the
-    upgrade script's ``python -c``) can be torn down before that upload runs,
-    silently losing the event. This client sends inline (``sync_mode=True``),
-    so ``capture()`` does not return until the event has actually been POSTed.
-    """
-    ph_meta = load_ph_metadata()
-    key = ph_meta.get("posthog_key")
-    host = ph_meta.get("posthog_host", "https://us.i.posthog.com")
-    assert key, "POSTHOG_KEY is not configured in ph_metadata.json"
-    # Bound the inline upload: sync callers are best-effort telemetry, so a slow
-    # or unreachable PostHog must never stall the caller (e.g. the upgrade run).
-    return Posthog(
-        project_api_key=key,
-        host=host,
-        sync_mode=True,
-        timeout=5,
-        max_retries=1,
-    )
-
-
 def capture(
     event: str,
     properties: Optional[Dict[str, Any]] = None,
-    sync: bool = False,
 ) -> None:
     """Emit a PostHog event identified by the sandbox ``thread_id``.
 
@@ -90,9 +64,6 @@ def capture(
     Args:
         event:      Event name (e.g. ``"task_started"``).
         properties: Optional dict of metadata to attach to the event.
-        sync:       Upload inline before returning (vs. the async ~5s batch);
-                    set ``True`` for short-lived callers that may exit or be
-                    torn down before the background upload runs.
     """
     # Require a PostHog key from ph_metadata.json.
     ph_meta = load_ph_metadata()
@@ -122,8 +93,7 @@ def capture(
     props["ninja_user_id"] = user_id
     distinct_id = user_id
 
-    client = get_sync_posthog_client() if sync else get_posthog_client()
-    client.capture(
+    get_posthog_client().capture(
         distinct_id=distinct_id,
         event=event,
         properties=props,
