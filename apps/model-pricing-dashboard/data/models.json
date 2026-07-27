@@ -1,6 +1,6 @@
 {
-  "last_collected": "2026-07-20T09:02:37Z",
-  "generated_at": "2026-07-20T09:02:37.844667+00:00",
+  "last_collected": "2026-07-27T09:02:02Z",
+  "generated_at": "2026-07-27T09:02:02.772653+00:00",
   "currency": "USD",
   "price_unit": "per 1,000,000 tokens",
   "provider_count": 6,
@@ -74,15 +74,15 @@
         "vision"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": false
+      "price_stale": true
     },
     {
       "provider": "OpenAI",
@@ -132,15 +132,15 @@
         "general"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": false
+      "price_stale": true
     },
     {
       "provider": "OpenAI",
@@ -221,15 +221,15 @@
         "long-context"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": false
+      "price_stale": true
     },
     {
       "provider": "OpenAI",
@@ -251,15 +251,15 @@
         "general"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": false
+      "price_stale": true
     },
     {
       "provider": "OpenAI",
@@ -488,15 +488,15 @@
         "long-context"
       ],
       "provenance": {
-        "input_price": "aggregator",
-        "cached_price": "aggregator",
-        "output_price": "aggregator",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
         "context_window": "official",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": false,
+      "price_stale": true,
       "official_source": "https://docs.claude.com/en/docs/about-claude/models/overview"
     },
     {
@@ -507,7 +507,7 @@
       "cached_price": 0.5,
       "output_price": 25.0,
       "price_unit": "USD per 1M tokens",
-      "context_window": 1000000,
+      "context_window": 200000,
       "modalities": [
         "text",
         "vision"
@@ -521,7 +521,7 @@
         "input_price": "official",
         "cached_price": "official",
         "output_price": "official",
-        "context_window": "official",
+        "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
@@ -776,10 +776,10 @@
       "name": "Grok 4.5",
       "family": "Grok 4.5",
       "input_price": 2.0,
-      "cached_price": 0.3,
+      "cached_price": 0.5,
       "output_price": 6.0,
       "price_unit": "USD per 1M tokens",
-      "context_window": 500000,
+      "context_window": 256000,
       "modalities": [
         "text",
         "vision"
@@ -790,16 +790,15 @@
         "general"
       ],
       "provenance": {
-        "input_price": "official",
-        "cached_price": "official",
-        "output_price": "official",
-        "context_window": "official",
+        "input_price": "fallback",
+        "cached_price": "fallback",
+        "output_price": "fallback",
+        "context_window": "fallback",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": false,
-      "official_source": "https://docs.x.ai/developers/pricing"
+      "price_stale": true
     },
     {
       "provider": "xAI",
@@ -1197,17 +1196,34 @@
   ],
   "refresh": {
     "method": "Tavily extract (extract_depth=advanced) of aipricing.guru",
-    "scraped_rows": 36,
-    "matched": 20,
-    "stale": 19,
+    "scraped_rows": 4,
+    "matched": 2,
+    "stale": 37,
     "stale_models": [
+      "GPT-4o mini",
+      "GPT-5.4 nano",
+      "GPT-4.1 mini",
+      "GPT-5.4 mini",
+      "GPT-4.1",
+      "GPT-4o",
+      "GPT-5.4",
+      "GPT-5.6 Terra",
       "GPT-5.5",
+      "GPT-5.6 Sol",
       "GPT-5.4 Pro",
       "GPT-5.5 Pro",
+      "Claude Haiku 4.5",
+      "Claude Sonnet 5",
+      "Claude Opus 4.8",
+      "Gemini 2.5 Flash-Lite",
+      "Gemini 2.5 Flash",
+      "Gemini 2.5 Pro",
+      "Gemini 3.5 Flash",
       "Gemini 3 Pro",
       "Grok 4.1 Fast",
       "Grok 3 Mini",
       "Grok 4.20",
+      "Grok 4.5",
       "Grok 4",
       "Grok 3",
       "Grok 2 Vision",
@@ -1219,7 +1235,8 @@
       "Magistral Small",
       "Mixtral 8x7B",
       "Mistral Medium 3.5",
-      "Pixtral Large"
+      "Pixtral Large",
+      "DeepSeek V4 Pro"
     ]
   },
   "official_refresh": {
@@ -1236,7 +1253,7 @@
       "Anthropic": "https://docs.claude.com/en/docs/about-claude/models/overview",
       "Google": "https://ai.google.dev/gemini-api/docs/models"
     },
-    "matched": 18,
+    "matched": 17,
     "by_provider": {
       "OpenAI": {
         "matched": 9,
@@ -1251,7 +1268,7 @@
         "catalog": 5
       },
       "xAI": {
-        "matched": 1,
+        "matched": 0,
         "catalog": 8
       },
       "Mistral": {
@@ -1279,7 +1296,6 @@
       "Google/Gemini 2.5 Flash",
       "Google/Gemini 2.5 Pro",
       "Google/Gemini 3.5 Flash",
-      "xAI/Grok 4.5",
       "DeepSeek/DeepSeek V4 Flash",
       "DeepSeek/DeepSeek V4 Pro"
     ],
@@ -1300,11 +1316,6 @@
         "to": 1050000
       },
       {
-        "model": "Anthropic/Claude Opus 4.8",
-        "from": 200000,
-        "to": 1000000
-      },
-      {
         "model": "Google/Gemini 3.5 Flash",
         "from": 1000000,
         "to": 1048576
@@ -1313,11 +1324,6 @@
         "model": "Google/Gemini 3 Pro",
         "from": 1000000,
         "to": 1048576
-      },
-      {
-        "model": "xAI/Grok 4.5",
-        "from": 256000,
-        "to": 500000
       },
       {
         "model": "DeepSeek/DeepSeek V4 Flash",
@@ -1331,28 +1337,9 @@
       }
     ],
     "drift_threshold_pct": 25.0,
-    "drift": [
-      {
-        "model": "xAI/Grok 4.5",
-        "field": "cached_price",
-        "from": 0.5,
-        "to": 0.3,
-        "pct": 40.0,
-        "prev_provenance": "aggregator"
-      }
-    ],
-    "drift_vs_previous_run": [
-      {
-        "model": "xAI/Grok 4.5",
-        "field": "cached_price",
-        "from": 0.5,
-        "to": 0.3,
-        "pct": 40.0,
-        "tier": "official",
-        "vs": "2026-07-17T02:37:49Z"
-      }
-    ],
-    "history_compared_to": "2026-07-17T02:37:49Z",
+    "drift": [],
+    "drift_vs_previous_run": [],
+    "history_compared_to": "2026-07-20T09:02:37Z",
     "not_scraped": {
       "Mistral": "mistral.ai/pricing lists subscription plans only, not API token prices \u2014 kept on aggregator/fallback"
     }
