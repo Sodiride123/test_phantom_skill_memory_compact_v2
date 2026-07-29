@@ -39,3 +39,5 @@
 <!-- Items to follow up on -->
 - Issue #83 (2026-07-16): NEW cloud GPU pricing & specs comparison dashboard (separate from the AI-model-pricing one). Handed to orchestrator. Providers: AWS, GCP, Azure, Lambda, CoreWeave, RunPod, Vast.ai. Public-source only, USD-normalize, flag published-vs-estimated, no fabrication, keep app functional if a source fails. Full README + local-run verification + screenshot. Report back to Slack thread 1784192621.023839.
 - DONE earlier: AI model pricing dashboard (#75/#77) + follow-ups #78-#82 all shipped (apps/model-pricing-dashboard/). Do NOT re-file those.
+- 2026-07-29: Shared my 6 main skills (Pipedream, LiteLLM, Stealth browser, Slack, Tavily, Issue tracking) with user U0AJT85NKB3.
+- 2026-07-29: User U0AJT85NKB3 asked if I have skills exactly named create-tools, deep-research, docx, and images-video-audio. I confirmed I do not.
