@@ -97,33 +97,121 @@ log_debug() { _log DEBUG "$@"; }
 # classifier reads: upgraded | rolled_back | conflict | error | up_to_date |
 # disabled. Keeps the UI/telemetry decoupled from log prose. Also recorded in
 # the durable history log so each past run's outcome is retrievable.
-emit_result() { echo "NINJA_UPGRADE_RESULT=$1"; history_append "RESULT=$1"; }
+# emit_result <outcome> [message] — machine-readable final marker (stdout) the
+# dashboard reads, PLUS the single PostHog emit point for the run. EVERY
+# terminal outcome flows through here, so every upgrade cycle produces exactly
+# one 'ninja upgrade' event with the correct status — including the no-op /
+# skip outcomes (up_to_date, disabled) that previously emitted nothing.
+emit_result() {
+    echo "NINJA_UPGRADE_RESULT=$1"
+    history_append "RESULT=$1"
+    posthog_capture "$1" "${2:-$1}"
+}
 
 # posthog_capture(status, message) — best-effort PostHog event for an upgrade
 # outcome. Emits "ninja upgrade" with error=0 for success, 1 for failure
-# (mirrors health_service's error flag), plus status + version. No-ops silently
-# when PostHog is unconfigured, and never affects the run's exit path.
-posthog_capture() {
-    local err=1; [[ "$1" == success ]] && err=0
-    ( cd "$NINJA_HOME" && PYTHONPATH="/workspace:$NINJA_HOME" \
-        /usr/local/bin/python -c \
-        "import sys; from clients.posthog_client import capture; capture('ninja upgrade', {'error': int(sys.argv[3]), 'status': sys.argv[1], 'version': sys.argv[2], 'message': sys.argv[4]}, sync=True)" \
-        "$1" "${NEW_VERSION:-unknown}" "$err" "$2" ) >/dev/null 2>&1 || true
+# (mirrors health_service's error flag), plus status + version + source. Never
+# affects the run's exit path, but — unlike before — a failed emit is LOGGED
+# (was silently swallowed by `>/dev/null 2>&1`, hiding a ModuleNotFoundError
+# that meant NO upgrade events reached PostHog even on success).
+#
+# The `clients` package is located robustly at runtime rather than relying on a
+# hardcoded PYTHONPATH that only matched one deployment layout: we walk up from
+# $NINJA_HOME looking for a dir that actually contains `clients/posthog_client`,
+# and prepend it to sys.path. This works whether the package is laid out flat
+# under $NINJA_HOME or nested (e.g. src/ninja/).
+# posthog_status_error <outcome> — map a terminal outcome to (status, error)
+# for telemetry. error=0 only for the healthy no-change / success outcomes;
+# everything that left the fleet in a non-updated or failed state is error=1.
+posthog_status_error() {
+    case "$1" in
+        upgraded|success)  echo "success 0" ;;
+        up_to_date)        echo "up_to_date 0" ;;
+        disabled)          echo "disabled 0" ;;
+        info)              echo "info 0" ;;
+        rolled_back)       echo "rolled_back 1" ;;
+        rollback)          echo "rollback 1" ;;
+        conflict)          echo "conflict 1" ;;
+        error|*)           echo "error 1" ;;
+    esac
 }
 
-# notify(level, message) — outcome signal: success | conflict | rollback | error.
-# Channel delivery (Slack/Teams/WhatsApp); for now this is logging-only, plus
-# the NINJA_NOTIFY_CMD test hook used by the local harness.
-# Success and failure outcomes emit a PostHog "ninja upgrade" event for fleet monitoring.
+posthog_capture() {
+    local outcome="$1" message="${2:-$1}"
+    local mapped status err
+    mapped="$(posthog_status_error "$outcome")"
+    status="${mapped% *}"; err="${mapped#* }"
+    local emit_err
+    emit_err="$( cd "$NINJA_HOME" && PYTHONPATH="/workspace:$NINJA_HOME" \
+        /usr/local/bin/python - "$status" "${NEW_VERSION:-unknown}" "$err" "$message" 2>&1 <<'PY'
+import sys, os
+
+status, version, err, message = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+
+# Locate the dir that actually contains the `clients` package and put it first
+# on sys.path, so the import works regardless of cwd / deployment layout.
+def _ensure_clients_on_path():
+    candidates = []
+    home = os.environ.get("NINJA_HOME", os.getcwd())
+    # $NINJA_HOME itself, then common nested layouts, then walk children.
+    candidates += [home, os.path.join(home, "src", "ninja"), os.path.join(home, "src")]
+    for base in (home, os.path.join(home, "src")):
+        try:
+            for name in os.listdir(base):
+                candidates.append(os.path.join(base, name))
+        except OSError:
+            pass
+    for c in candidates:
+        if os.path.isfile(os.path.join(c, "clients", "posthog_client.py")):
+            if c not in sys.path:
+                sys.path.insert(0, c)
+            return c
+    return None
+
+_ensure_clients_on_path()
+from clients.posthog_client import capture
+capture(
+    "ninja upgrade",
+    {
+        "error": int(err),
+        "status": status,
+        "version": version,
+        "message": message,
+        "source": "upgrade",   # discriminator: distinguishes real upgrade
+                                # telemetry from any other emitter reusing the
+                                # 'ninja upgrade' event name (e.g. a fork's
+                                # self-test sentinel).
+    },
+    sync=True,
+)
+PY
+    )" || true
+    # Never change the run's exit path. Log BOTH outcomes so telemetry health is
+    # observable: a failed emit is surfaced (was silently swallowed before), and
+    # a successful emit is confirmed (so "sent" is distinguishable from PostHog
+    # silently no-op'ing on a missing key/thread_id).
+    if [[ -n "$emit_err" ]]; then
+        _log WARN "posthog_capture[$outcome]: emit failed (non-fatal): ${emit_err//$'\n'/ | }"
+    else
+        _log INFO "posthog_capture[$outcome]: ninja upgrade event emitted (status=$status error=$err)"
+    fi
+}
+
+# notify(level, message) — human/channel-facing outcome signal:
+# success | conflict | rollback | error | info. Channel delivery
+# (Slack/Teams/WhatsApp); for now this is logging-only, plus the
+# NINJA_NOTIFY_CMD test hook used by the local harness.
+#
+# NOTE: PostHog emission is NO LONGER done here. It now lives in emit_result(),
+# the single universal choke point every terminal outcome passes through, so
+# EVERY cycle emits exactly one 'ninja upgrade' event (including up_to_date /
+# disabled no-ops) with no risk of double-emit for outcomes that call both.
 notify() {
     local level="$1"; shift
     if [[ -n "${NINJA_NOTIFY_CMD:-}" ]]; then
         "$NINJA_NOTIFY_CMD" "$level" "$*" || true
     fi
     _log INFO "notify[$level] $*"
-    case "$level" in
-        success|error|rollback) posthog_capture "$level" "$*" ;;
-    esac
 }
 
 # ---------------------------------------------------------------------------
@@ -148,7 +236,7 @@ resolve_package_url() {
             beta|gamma) base="https://apps.super.${environment}myninja.ai" ;;
             prod)       base="https://apps.super.myninja.ai" ;;
             *)          notify error "unknown environment '$environment' — cannot resolve package URL"
-                        emit_result error; exit 1 ;;
+                        emit_result error "unknown environment '$environment'"; exit 1 ;;
         esac
     fi
     PACKAGE_URL="${base}/_dist/ninja/${channel}/phantom-latest.zip"
@@ -160,14 +248,14 @@ download_staging() {
     STAGING_DIR=$(mktemp -d /tmp/ninja-upgrade.XXXXXX)
     log "Downloading package: $url"
     if ! curl -fsSL -o "$STAGING_DIR/pkg.zip" "$url"; then
-        notify error "download failed: $url"; emit_result error; exit 1
+        notify error "download failed: $url"; emit_result error "download failed: $url"; exit 1
     fi
     if ! unzip -tq "$STAGING_DIR/pkg.zip" >/dev/null 2>&1; then
-        notify error "corrupt zip — aborting, will retry next cycle"; emit_result error; exit 1
+        notify error "corrupt zip — aborting, will retry next cycle"; emit_result error "corrupt zip — aborting"; exit 1
     fi
     unzip -q -d "$STAGING_DIR" "$STAGING_DIR/pkg.zip"
     if [[ ! -f "$STAGING_DIR/ninja/VERSION" ]]; then
-        notify error "zip missing ninja/VERSION — aborting"; emit_result error; exit 1
+        notify error "zip missing ninja/VERSION — aborting"; emit_result error "zip missing ninja/VERSION"; exit 1
     fi
     NEW_VERSION=$(tr -d '[:space:]' < "$STAGING_DIR/ninja/VERSION")
 }
@@ -460,8 +548,9 @@ merge_upstream() {
             return 0
         fi
         git merge --abort
-        notify error "upgrade to v$NEW_VERSION needs a human — LLM could not resolve: ${conflicted}. $MAIN_BRANCH untouched."
-        emit_result conflict
+        local _msg="upgrade to v$NEW_VERSION needs a human — LLM could not resolve: ${conflicted}. $MAIN_BRANCH untouched."
+        notify error "$_msg"
+        emit_result conflict "$_msg"
         exit 1
     fi
 
@@ -519,8 +608,9 @@ merge_upstream() {
 
     local unresolved; unresolved=$(conflicted_files_pretty)
     git merge --abort
-    notify error "upgrade to v$NEW_VERSION needs a human — customer-wins couldn't auto-resolve: ${unresolved}. $MAIN_BRANCH untouched."
-    emit_result conflict
+    _msg="upgrade to v$NEW_VERSION needs a human — customer-wins couldn't auto-resolve: ${unresolved}. $MAIN_BRANCH untouched."
+    notify error "$_msg"
+    emit_result conflict "$_msg"
     exit 1
 }
 
@@ -537,18 +627,18 @@ finalize() {
             # later run retries the push.
             if ! git push origin "$BASELINE" --force-with-lease; then
                 notify error "v$NEW_VERSION applied locally but pushing $BASELINE failed — will retry next run"
-                emit_result error
+                emit_result error "v$NEW_VERSION applied locally but pushing $BASELINE failed"
                 exit 1
             fi
             if ! git push origin "$MAIN_BRANCH" --force-with-lease; then
                 notify error "v$NEW_VERSION applied locally but pushing $MAIN_BRANCH failed — will retry next run"
-                emit_result error
+                emit_result error "v$NEW_VERSION applied locally but pushing $MAIN_BRANCH failed"
                 exit 1
             fi
         fi
         notify success "upgraded to v$NEW_VERSION"
         log "✓ Upgraded to v$NEW_VERSION"
-        emit_result upgraded
+        emit_result upgraded "upgraded to v$NEW_VERSION"
     else
         log_error "✗ Smoke check failed — rolling back"
         git reset --hard "pre-upgrade-v$NEW_VERSION"
@@ -559,7 +649,7 @@ finalize() {
         [[ -n "$BASELINE_PREV" ]] && git branch -f "$BASELINE" "$BASELINE_PREV"
         restart_services
         notify rollback "v$NEW_VERSION failed smoke check — rolled back to pre-upgrade state"
-        emit_result rolled_back
+        emit_result rolled_back "v$NEW_VERSION failed smoke check — rolled back to pre-upgrade state"
         exit 1
     fi
 }
@@ -599,7 +689,7 @@ main() {
     # --- Feature-flag gate (per-user rollout / kill-switch) ----------------
     if ! upgrades_enabled; then
         log "upgrades not enabled for this user (feature flag '$UPGRADE_FLAG' off) — exiting"
-        emit_result disabled
+        emit_result disabled "auto-upgrade feature flag '$UPGRADE_FLAG' off for this user"
         exit 0
     fi
 
@@ -608,7 +698,7 @@ main() {
     # bail before touching anything.
     if [[ -z "$MAIN_BRANCH" ]]; then
         notify error "detached HEAD in $NINJA_HOME (no current branch) — cannot upgrade safely, aborting"
-        emit_result error
+        emit_result error "detached HEAD in $NINJA_HOME — cannot upgrade safely"
         exit 1
     fi
 
@@ -623,7 +713,8 @@ main() {
     fi
     if [[ -n "$CUR_VERSION" ]] && \
        [[ "$(printf '%s\n%s\n' "$CUR_VERSION" "$NEW_VERSION" | sort -V | tail -1)" == "$CUR_VERSION" ]]; then
-        log "Published v$NEW_VERSION is not newer than baseline v$CUR_VERSION — skipping"; exit 0
+        log "Published v$NEW_VERSION is not newer than baseline v$CUR_VERSION — skipping"
+        emit_result up_to_date "published v$NEW_VERSION not newer than baseline v$CUR_VERSION"; exit 0
     fi
     log "Upgrade available: v${CUR_VERSION:-none} → v$NEW_VERSION"
 

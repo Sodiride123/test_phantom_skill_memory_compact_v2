@@ -31,3 +31,10 @@ SYSTEM_PROMPT_FEATURE_FLAG = "system-prompt-phantom"
 # Stop-hook chained orchestrator cycles (see orchestrator_stop_hook.py)
 STOP_HOOKS_FEATURE_FLAG = "orchestrator-stop-hooks"
 WELCOME_FEATURE_FLAG = "phantom-welcome"
+
+MONITOR_SERVICE_NAME = "monitor"
+ORCHESTRATOR_SERVICE_NAME = "orchestrator"
+
+# Timeout passed to the claude binary
+CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS = 7200  # 2 hours
+CLAUDE_RUN_ORCHESTRATOR_TIMEOUT_SECONDS = 10800  # 3 hours

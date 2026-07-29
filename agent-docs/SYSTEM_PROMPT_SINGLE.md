@@ -27,7 +27,7 @@ For actions that are hard to reverse or outward-facing, confirm first unless dur
 
 # Memory
 
-You have a persistent file-based memory at `/root/.claude/projects/-workspace-ninja-src-ninja/memory/`. This directory already exists — write to it directly with the Write tool (do not run mkdir or check for its existence). Each memory is one file holding one fact, with frontmatter:
+You have a persistent file-based memory at `/root/.claude/projects/-workspace-ninja/memory/`. This directory already exists — write to it directly with the Write tool (do not run mkdir or check for its existence). Each memory is one file holding one fact, with frontmatter:
 
 ```markdown
 ---

@@ -46,6 +46,12 @@ from clients.litellm_client import (
 from clients.posthog_client import capture
 from messaging import get_messaging_interface
 from processes.common import MONITOR_HEARTBEAT_FILE
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 from tools.token_health import check_github_token
 from utils.pipedream import PipedreamClient
 
@@ -255,6 +261,22 @@ def _fetch_egress_ip(proxy: str | None) -> str | None:
         return None
 
 
+@retry(
+    retry=retry_if_exception_type(OSError),
+    stop=stop_after_attempt(_DEFAULT_MAX_RETRIES),
+    wait=wait_exponential(multiplier=1, max=4),
+    reraise=True,
+    before_sleep=lambda rs: _print(
+        f"VPN port check attempt {rs.attempt_number}/{_DEFAULT_MAX_RETRIES} failed"
+        f" ({rs.outcome.exception()}); retrying in {rs.next_action.sleep:.0f}s"
+    ),
+)
+def _check_vpn_port() -> None:
+    """Open a TCP connection to the Psiphon proxy port; raises OSError on failure."""
+    with socket.create_connection((PSIPHON_HOST, PSIPHON_PORT), timeout=5):
+        pass
+
+
 def check_vpn_health() -> int:
     """Emit ``ninja vpn health`` (error=1) only if the browser VPN is broken.
 
@@ -262,9 +284,9 @@ def check_vpn_health() -> int:
     Returns 1 on error, 0 on success.
     """
     try:
-        with socket.create_connection((PSIPHON_HOST, PSIPHON_PORT), timeout=5):
-            pass
+        _check_vpn_port()
     except OSError as e:
+        # All attempts exhausted — proxy is genuinely down.
         _emit_error("ninja vpn health", "VPN proxy_down", message=str(e)[:120])
         _print(f"VPN ERROR (proxy {PSIPHON_PROXY} not listening: {e})")
         return 1

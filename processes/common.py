@@ -34,7 +34,7 @@ from pathlib import Path
 
 from agents_config import AGENTS
 from clients.posthog_client import capture, is_feature_enabled
-from constants import WELCOME_FEATURE_FLAG
+from constants import MONITOR_SERVICE_NAME, WELCOME_FEATURE_FLAG
 from core.config import (
     install_sighup_handler,
     is_orchestrator_enabled,
@@ -44,6 +44,7 @@ from core.config import (
     save_agent_messages,
     save_seen_messages,
 )
+from core.logging import get_logger
 from messaging.factory import get_messaging_interface, resolve_messaging_channel
 from processes.base import MonitorStrategy
 from processes.orchestrator import (
@@ -60,6 +61,8 @@ from services.monitor_service import (
 )
 from tools.token_health import check_github_token
 from utils.cost import check_cost_limit
+
+logger = get_logger(MONITOR_SERVICE_NAME)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -291,6 +294,7 @@ class PollingMonitorStrategy(MonitorStrategy):
             print("\u274c No valid agent configured!", file=sys.stderr)
             print(f"Available agents: {', '.join(AGENTS.keys())}", file=sys.stderr)
             print("Set 'default_agent' in ~/.agent_settings.json", file=sys.stderr)
+            logger.info("No valid agent configured; exiting")
             return 1
 
         agent = AGENTS[agent_id]
@@ -339,6 +343,7 @@ class PollingMonitorStrategy(MonitorStrategy):
             f"\U0001f4e1 Starting monitor loop (max {MAX_RUNTIME // 60} minutes)...",
             flush=True,
         )
+        logger.info(f"Starting monitor loop for agent {agent_id} on channel {channel}")
 
         try:
             while True:
@@ -353,6 +358,9 @@ class PollingMonitorStrategy(MonitorStrategy):
                         " Stopping.",
                         flush=True,
                     )
+                    logger.info(
+                        f"Max runtime ({MAX_RUNTIME // 60} minutes) reached for agent. Stopping."
+                    )
                     break
 
                 if rate_limiter.is_backing_off():
@@ -361,6 +369,7 @@ class PollingMonitorStrategy(MonitorStrategy):
                         f"\u23f3 Rate limit backoff: {remaining:.0f}s remaining...",
                         flush=True,
                     )
+                    logger.info(f"Rate limit backoff: {remaining:.0f}s remaining.")
                     time.sleep(min(remaining, 30))
                     continue
 
@@ -378,9 +387,11 @@ class PollingMonitorStrategy(MonitorStrategy):
                             f"\u26a0\ufe0f Error reading messages: {e}",
                             file=sys.stderr,
                         )
+                        logger.error(f"Error reading messages: {e}")
                     continue
 
                 print(f"\U0001f4e8 Got {len(raw_messages)} messages", flush=True)
+                logger.info(f"Got {len(raw_messages)} messages")
 
                 pending_messages: list = []
 
@@ -406,11 +417,7 @@ class PollingMonitorStrategy(MonitorStrategy):
                                 "cron_id": job["id"],
                             }
                         )
-                        print(
-                            f"  \u23f0 Cron job '{job['id']}' is due"
-                            " \u2014 queued for batch",
-                            flush=True,
-                        )
+                        logger.info(f"Cron job '{job['id']}' is due — queued for batch")
 
                 # --- dispatch ---
                 if pending_messages:
@@ -423,6 +430,9 @@ class PollingMonitorStrategy(MonitorStrategy):
                         " pending message(s)...",
                         flush=True,
                     )
+                    logger.info(
+                        f"Processing {len(pending_messages)} pending message(s)"
+                    )
                     blocked_msg = check_cost_limit()
                     if blocked_msg:
                         iface.say(blocked_msg)
@@ -430,6 +440,7 @@ class PollingMonitorStrategy(MonitorStrategy):
                             "\U0001f6ab Cost limit exceeded" " \u2014 dispatch blocked",
                             flush=True,
                         )
+                        logger.warning("Cost limit exceeded — dispatch blocked")
                     else:
                         run_batched_response(agent, pending_messages, iface.say)
                 else:
@@ -445,15 +456,13 @@ class PollingMonitorStrategy(MonitorStrategy):
                 sleep_time = args.interval + jitter
                 if rate_limiter.consecutive_rate_limits > 0:
                     sleep_time += BACKOFF_INITIAL / 2
-                    print(
-                        f"\U0001f4a4 Extended sleep due to recent rate limits:"
-                        f" {sleep_time:.0f}s",
-                        flush=True,
+                    logger.info(
+                        f"Extended sleep due to recent rate limits: {sleep_time:.0f}s"
                     )
                 time.sleep(sleep_time)
 
         except KeyboardInterrupt:
-            print("\n\n\U0001f44b Monitor stopped")
+            logger.info("Monitor stopped via KeyboardInterrupt")
             save_seen_messages(seen_messages)
             save_agent_messages(agent_data)
 

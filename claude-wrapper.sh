@@ -46,7 +46,16 @@ fi
 # Run claude — prompt is fed via stdin from CLAUDE_PROMPT_FILE to avoid
 # E2BIG / MAX_ARG_STRLEN when the prompt exceeds the ~128 KB kernel limit.
 # script(1) cannot forward piped stdin, so we run the binary directly.
-"$CLAUDE_BIN" --settings "$SETTINGS_FILE" "$@" < "$CLAUDE_PROMPT_FILE" > "$TMPFILE" 2>&1
+# default timeout is 2 hours (7200 seconds)
+CLAUDE_TIMEOUT="${CLAUDE_TIMEOUT:-7200}"
+timeout --signal=TERM --kill-after=10s "${CLAUDE_TIMEOUT}s" \
+    "$CLAUDE_BIN" --settings "$SETTINGS_FILE" "$@" < "$CLAUDE_PROMPT_FILE" > "$TMPFILE" 2>&1
+CLAUDE_EXIT=$?
+
+# `timeout` exits 124 when it kills the process due to the time limit.
+if [ "$CLAUDE_EXIT" -eq 124 ]; then
+    echo "ERROR: claude timed out after ${CLAUDE_TIMEOUT}s" >> "$TMPFILE"
+fi
 
 # Clean and output the result (remove ANSI codes, OSC sequences, and control chars)
 cat "$TMPFILE" | tr -d '\r' | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g; s/\x1b\[[?][0-9]*[a-zA-Z]//g; s/\x1b\[<u//g; s/\x1b\][0-9]*;[^\x07]*\x07//g'
