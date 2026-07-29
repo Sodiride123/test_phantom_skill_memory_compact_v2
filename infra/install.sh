@@ -14,9 +14,6 @@
 #   4.   Installs and enables systemd services
 #   5.   Configures VNC (removes password)
 #   6.   Waits for browser server to be ready
-#
-# Prerequisites (must be provided manually — not handled by this script):
-#   - s3_config.json at repo root or /root/  (AWS credentials for S3 cache)
 
 set -euo pipefail
 
@@ -163,8 +160,9 @@ if [[ "$MESSAGING_CHANNEL" == "whatsapp" ]]; then
         cp "$SCRIPT_DIR/systemd/whatsapp/ninja-queued-ack.service" /etc/systemd/system/ninja-queued-ack.service
     fi
 
-    # systemd ignores /etc/environment — inject channel for dashboard badge/mode.
-    for svc in ninja-dashboard; do
+    # systemd ignores /etc/environment — inject channel for dashboard badge/mode
+    # and for the integrations service (else its factory defaults to "slack").
+    for svc in ninja-dashboard ninja-integrations; do
         mkdir -p "/etc/systemd/system/${svc}.service.d"
         printf '[Service]\nEnvironment=MESSAGING_CHANNEL=%s\n' "$MESSAGING_CHANNEL" \
             > "/etc/systemd/system/${svc}.service.d/channel.conf"
@@ -203,7 +201,7 @@ else
 
     # systemd ignores /etc/environment, so inject MESSAGING_CHANNEL into the units
     # that build a messaging interface (else they fall back to the "slack" default).
-    for svc in ninja-monitor ninja-health ninja-dashboard; do
+    for svc in ninja-monitor ninja-health ninja-dashboard ninja-integrations; do
         mkdir -p "/etc/systemd/system/${svc}.service.d"
         printf '[Service]\nEnvironment=MESSAGING_CHANNEL=%s\n' "$MESSAGING_CHANNEL" \
             > "/etc/systemd/system/${svc}.service.d/channel.conf"

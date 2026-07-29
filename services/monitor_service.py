@@ -24,16 +24,27 @@ from typing import Optional
 from clients.posthog_client import capture, is_feature_enabled
 from clients.super_ninja_client import get_super_ninja_url, get_thread_id
 from constants import (
+    CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS,
     DEFAULT_TASK_TITLE,
+    MONITOR_SERVICE_NAME,
     SYSTEM_PROMPT_FEATURE_FLAG,
     SYSTEM_PROMPT_PATH,
     SYSTEM_PROMPT_PATH_SINGLE,
 )
 from core.config import is_orchestrator_enabled
+from core.logging import get_logger
 from messaging.message_utils import FORCE_THREAD_ENV, forced_thread_for_batch
 from utils.agent_files_logs import if_session_exists_by_name
-from utils.cost import build_custom_headers, generate_task_title, record_task_cost
+from utils.cost import (
+    build_custom_headers,
+    generate_task_title,
+    record_task_cost,
+)
 from utils.system_notification import get_disk_warning
+
+from ninja.tools.claude_utils import get_api_error_in_session
+
+logger = get_logger(MONITOR_SERVICE_NAME)
 
 # REPO_ROOT is the src/ninja/ package root — used to locate claude-wrapper.sh
 _REPO_ROOT = Path(__file__).parent.parent
@@ -113,7 +124,7 @@ def build_welcome_message(agent: dict) -> str:
         "- \U0001f50c **Integrations (3,000+ apps)** \u2014 direct, "
         "authenticated access to Slack, Gmail, Google Calendar, "
         "GitHub, Jira, Linear, Notion, Salesforce, HubSpot, Stripe, "
-        "Airtable, Asana, LinkedIn, X/Twitter, AWS, and ~3,000 more. "
+        "Airtable, Asana, LinkedIn, AWS, and ~3,000 more. "
         "*Best for:* anything with a stable API \u2014 fast, reliable, "
         "rate-limit-friendly, and works in the background even while "
         "you're offline.\n"
@@ -123,8 +134,7 @@ def build_welcome_message(agent: dict) -> str:
         "**\U0001f4ac How to brief me**\n"
         "- Just type a message in this channel \u2014 I reply to every "
         "human message.\n"
-        "- Include the word `ninja` anywhere in your message to be "
-        "explicit, or to ping me from a thread.\n"
+        "- Reply in a thread or post in the channel to ping me.\n"
         "- Send a *voice note* in any language and I'll transcribe and "
         "act on it.\n"
         "- Drop a *screenshot, PDF, spreadsheet, or any file* with "
@@ -193,7 +203,7 @@ def run_batched_response(
     system_prompt_enabled = is_feature_enabled(
         SYSTEM_PROMPT_FEATURE_FLAG, default=False
     )
-    print(f"System prompt feature enabled: {system_prompt_enabled}")
+    logger.info(f"System prompt feature enabled: {system_prompt_enabled}")
 
     messages_text = ""
     for i, msg in enumerate(pending_messages, 1):
@@ -288,10 +298,7 @@ def run_batched_response(
     if disk_warning:
         prompt += f"\n\n{disk_warning}"
 
-    print(
-        f"\n{agent_emoji} Sending {len(pending_messages)} message(s) to Claude...",
-        flush=True,
-    )
+    logger.info(f"Sending {len(pending_messages)} message(s) to Claude...")
 
     texts = [msg.get("text", "") for msg in pending_messages if msg.get("text")]
     started_at = datetime.now(timezone.utc).timestamp()
@@ -334,6 +341,8 @@ def run_batched_response(
             f.write(prompt)
             prompt_file = f.name
             subprocess_env["CLAUDE_PROMPT_FILE"] = prompt_file
+            subprocess_env["CLAUDE_TIMEOUT"] = str(CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS)
+        claude_started = time.monotonic()
         if system_prompt_enabled:
             system_prompt_path = (
                 SYSTEM_PROMPT_PATH
@@ -353,7 +362,7 @@ def run_batched_response(
                 cwd=str(_REPO_ROOT),
                 capture_output=True,
                 text=True,
-                timeout=180,
+                timeout=CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS + 60,
                 env=subprocess_env,
             )
         else:
@@ -362,9 +371,33 @@ def run_batched_response(
                 cwd=str(_REPO_ROOT),
                 capture_output=True,
                 text=True,
-                timeout=180,
+                timeout=CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS + 60,
                 env=subprocess_env,
             )
+        capture(
+            "claude_wrapper_duration",
+            {
+                "process": "monitor",
+                "duration_seconds": round(time.monotonic() - claude_started, 2),
+            },
+        )
+        # Check for claude api error in claude project logs
+        try:
+            api_error = get_api_error_in_session("monitor", MONITOR_SERVICE_NAME)
+        except Exception as e:
+            logger.warning(f"Could not run API-error transcript check: {e}")
+
+        if api_error:
+            logger.error(f"Detected API error in Claude session logs: {api_error}")
+            capture(
+                "claude_api_error",
+                {
+                    "process": "monitor",
+                    "task_id": task_id,
+                    "conversation_id": conversation_id,
+                },
+            )
+
         output = result.stdout + result.stderr
         success_count = (
             output.count("Message sent")
@@ -387,14 +420,12 @@ def run_batched_response(
             {"success": True, "response_count": success_count},
         )
         if success_count > 0:
-            print(
-                f"✅ Claude processed batch — {success_count} response indicator(s)",
-                flush=True,
+            logger.info(
+                f"Claude processed batch — {success_count} response indicator(s)"
             )
         else:
-            print(
-                f"⚠️ Claude batch response (may have posted): {output[:300]}...",
-                flush=True,
+            logger.warning(
+                f"Claude batch response (may have posted): {output[:300]}...",
             )
         return True
 
@@ -408,8 +439,9 @@ def run_batched_response(
                 f"**[Add credits \u2192]({top_up_url})**"
             )
             print("\U0001f4b3 Posted insufficient credit notification", flush=True)
+            logger.info("Posted insufficient credit notification")
         except Exception as e:
-            print(f"\u26a0\ufe0f Credit notification skipped: {e}", file=sys.stderr)
+            logger.warning(f"Credit notification skipped: {e}")
         capture(
             "ninja batch response failed because of the insufficient credits",
             {"success": False, "error": "insufficient credit"},
@@ -419,14 +451,14 @@ def run_batched_response(
         capture(
             "ninja batch response completed", {"success": False, "error": "timeout"}
         )
-        print("⚠️ Claude batch response timed out", flush=True)
+        logger.exception("Claude batch response timed out")
         return False
     except OSError as e:
-        print(f"⚠️ OS error running Claude: {e}", file=sys.stderr)
+        logger.exception(f"OS error running Claude: {e}")
         return False
     except Exception as e:
         capture("ninja batch response completed", {"success": False, "error": str(e)})
-        print(f"⚠️ Error: {e}", flush=True)
+        logger.exception(f"Error: {e}")
         return False
     finally:
         if prompt_file:

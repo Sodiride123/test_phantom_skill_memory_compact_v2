@@ -99,64 +99,19 @@ from clients.agent_event_cache_client import (
     AgentEventCacheClient,
     GetMessagesRequest,
 )
-from constants import AGENT_SETTINGS_PATH
+from constants import AGENT_SETTINGS_PATH, MONITOR_SERVICE_NAME
 from core.config import load_agent_config, save_agent_messages
+from core.logging import get_logger
 from core.metadata import load_sandbox_metadata
 from messaging.base import MessagingInterface
-from messaging.message_utils import resolve_reply_thread
+from messaging.message_utils import (
+    classify_message_type,
+    extract_file_attachments,
+    resolve_reply_thread,
+)
 from messaging.slack.slack_md_blocks import md_to_slack_blocks
 
-# ============================================================================
-# Logging — writes to the same logs/<agent>_<date>.log as orchestrator
-# ============================================================================
-
-# /workspace/logs is created by docker/entrypoint.sh and is the canonical
-# log directory for all processes in both production sandboxes and local
-# docker-compose dev. Mirrors the orchestrator (single source of truth).
-# Skip mkdir under pytest to avoid creating /workspace/ outside a container.
-LOG_DIR = Path("/workspace/logs")
-if os.environ.get("NINJA_TEST_MODE") != "1":
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-
-# Module-level logger — configured lazily on first use
-@cache
-def _get_logger() -> logging.Logger:
-    """Get or create the slack_interface logger.
-
-    Writes to logs/<agent>_<date>.log (same location as orchestrator).
-    Agent name is read from ~/.agent_settings.json config.
-    Falls back to 'slack' if no agent is configured.
-    """
-    logger = logging.getLogger("slack_interface")
-    logger.setLevel(logging.DEBUG)
-
-    # Don't add handlers if they already exist (avoid duplicates)
-    if logger.handlers:
-        return logger
-
-    # Determine agent name from config for log filename
-    agent_name = load_agent_config().get("default_agent", "slack").lower() or "slack"
-
-    # File handler — same format and location as orchestrator
-    log_filename = LOG_DIR / f"{agent_name}_{datetime.now().strftime('%Y-%m-%d')}.log"
-    try:
-        file_handler = logging.FileHandler(log_filename, encoding="utf-8")
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(
-            logging.Formatter(
-                "%(asctime)s | %(levelname)-8s | [slack] %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
-            )
-        )
-        logger.addHandler(file_handler)
-    except Exception:
-        pass  # If we can't write logs, don't crash
-
-    # No console handler — slack_interface already prints to stdout/stderr
-    # Adding a console handler would duplicate output
-
-    return logger
+logger = get_logger(MONITOR_SERVICE_NAME)
 
 
 # Markdown to Slack mrkdwn conversion (REQUIRED)
@@ -880,7 +835,7 @@ class SlackClient:
                             "Retry-After", base_delay * (2**attempt)
                         )
                         delay = min(float(retry_after), max_delay)
-                        _get_logger().warning(
+                        logger.warning(
                             f"API {method}: Rate limited (HTTP 429), retry {attempt + 1}/{max_retries} after {delay:.1f}s"
                         )
                         print(
@@ -913,7 +868,7 @@ class SlackClient:
                             "retry_after", base_delay * (2**attempt)
                         )
                         delay = min(float(retry_after), max_delay)
-                        _get_logger().warning(
+                        logger.warning(
                             f"API {method}: Rate limited (API response), retry {attempt + 1}/{max_retries} after {delay:.1f}s"
                         )
                         print(
@@ -930,7 +885,7 @@ class SlackClient:
                     "token_revoked",
                     "not_authed",
                 ):
-                    _get_logger().warning(
+                    logger.warning(
                         f"API {method}: Token error ({result.get('error')}), attempting refresh"
                     )
                     print(
@@ -968,7 +923,7 @@ class SlackClient:
                     )
                     time.sleep(delay)
                     continue
-                _get_logger().error(
+                logger.error(
                     f"API {method}: Connection error after {max_retries} retries: {str(e)}"
                 )
                 return {
@@ -977,12 +932,12 @@ class SlackClient:
                 }
 
             except requests.RequestException as e:
-                _get_logger().error(f"API {method}: Request error: {str(e)}")
+                logger.error(f"API {method}: Request error: {str(e)}")
                 return {"ok": False, "error": str(e)}
 
         # If we've exhausted all retries
         if last_exception:
-            _get_logger().error(
+            logger.error(
                 f"API {method}: Failed after {max_retries} retries: {str(last_exception)}"
             )
             return {
@@ -1405,7 +1360,6 @@ class SlackClient:
             params["unfurl_media"] = bool(unfurl_media)
 
         # Log intent before the API call
-        logger = _get_logger()
         sender = username or "bot"
         preview = text[:200] + ("..." if len(text) > 200 else "")
         logger.info(f"MSG SENDING [{sender} → {channel}]: {preview}")
@@ -1950,7 +1904,6 @@ def cmd_say(client: SlackClient, tokens: SlackTokens, args) -> None:
         auto_blocks_for_tables=auto_blocks,
     )
 
-    logger = _get_logger()
     if result.get("ok"):
         print(f"✅ Message sent successfully!")
         print(f"   Channel: {result.get('channel')}")
@@ -2151,7 +2104,7 @@ def cmd_read(client: SlackClient, tokens: SlackTokens, args) -> None:
         print("└" + "─" * 79)
 
     print(f"\n📊 Total: {len(messages)} messages from {channel_display}")
-    _get_logger().info(f"READ {len(messages)} messages from {channel_display}")
+    logger.info(f"READ {len(messages)} messages from {channel_display}")
 
 
 def cmd_upload(client: SlackClient, tokens: SlackTokens, args) -> None:
@@ -2261,7 +2214,6 @@ def cmd_upload(client: SlackClient, tokens: SlackTokens, args) -> None:
     if comment:
         print(f"   Comment: {comment[:50]}{'...' if len(comment) > 50 else ''}")
 
-    logger = _get_logger()
     try:
         result = slack.upload_file(
             file_path=file_path,
@@ -3488,68 +3440,9 @@ class SlackInterface(MessagingInterface):
     # ------------------------------------------------------------------
     # Monitor integration — ABC implementation
     # ------------------------------------------------------------------
-
-    @staticmethod
-    def extract_file_attachments(message: Dict) -> Dict:
-        """Categorise all file attachments in a Slack message by type.
-
-        Returns a dict with keys:
-            audio_files  — list of audio/voice files (mimetype audio/* or subtype voice_message)
-            image_files  — list of image files (mimetype image/*)
-            pdf_files    — list of PDF files (mimetype application/pdf)
-            other_files  — list of any other file types
-
-        Each entry is a dict with keys: name, mimetype, size, url
-        (url is url_private_download — requires bot token auth header).
-        """
-        audio_files, image_files, pdf_files, other_files = [], [], [], []
-        for f in message.get("files", []):
-            mimetype = f.get("mimetype", "")
-            subtype = f.get("subtype", "")
-            entry = {
-                "name": f.get("name", "unknown"),
-                "mimetype": mimetype,
-                "size": f.get("size", 0),
-                "url": f.get("url_private_download", ""),
-            }
-            if mimetype.startswith("audio/") or subtype == "voice_message":
-                audio_files.append(entry)
-            elif mimetype.startswith("image/"):
-                image_files.append(entry)
-            elif mimetype == "application/pdf":
-                pdf_files.append(entry)
-            elif mimetype:
-                other_files.append(entry)
-        return {
-            "audio_files": audio_files,
-            "image_files": image_files,
-            "pdf_files": pdf_files,
-            "other_files": other_files,
-        }
-
-    @staticmethod
-    def _classify_message_type(attachments: Dict, is_reply: bool) -> str:
-        """Determine the message type from pre-extracted attachments and position.
-
-        Attachment type takes precedence over position:
-            audio attachment        → "audio_message"
-            image / pdf / other     → "file_message"
-            no attachments, reply   → "thread_reply"
-            no attachments, main    → "mention"
-
-        Args:
-            attachments: result of extract_file_attachments()
-            is_reply:    True if the message is a thread reply
-        """
-        if attachments["audio_files"]:
-            return "audio_message"
-        if (
-            attachments["image_files"]
-            or attachments["pdf_files"]
-            or attachments["other_files"]
-        ):
-            return "file_message"
-        return "thread_reply" if is_reply else "mention"
+    # Attachment classification + message typing use the shared
+    # message_utils.extract_file_attachments / classify_message_type (field-
+    # tolerant across adapters) — no Slack-specific copy.
 
     def collect_pending(
         self,
@@ -3648,8 +3541,8 @@ class SlackInterface(MessagingInterface):
                     pass
 
             # Step 4: Classify and queue.
-            attachments = self.extract_file_attachments(candidate)
-            msg_type = self._classify_message_type(attachments, is_reply)
+            attachments = extract_file_attachments(candidate)
+            msg_type = classify_message_type(attachments, is_reply)
             user = candidate.get("user", "") or candidate.get("username", "Unknown")
             pending_messages.append(
                 {
@@ -3679,7 +3572,6 @@ class SlackInterface(MessagingInterface):
              (loaded and saved by the caller via agent_data).
           2. History sniff for the welcome signature in prior posts.
         """
-        logger = _get_logger()
         logger.info(f"Agent messages state: {agent}")
         if agent.get("welcomed"):
             logger.info(

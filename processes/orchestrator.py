@@ -22,16 +22,18 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 # Import centralized agent configuration
 from agents_config import AGENTS
-from clients.posthog_client import is_feature_enabled
+from clients.posthog_client import capture, is_feature_enabled
 from clients.super_ninja_client import get_thread_id
 from constants import (
     AGENT_SETTINGS_PATH,
+    CLAUDE_RUN_ORCHESTRATOR_TIMEOUT_SECONDS,
     SANDBOX_METADATA_PATH,
     STOP_HOOKS_FEATURE_FLAG,
     SYSTEM_PROMPT_FEATURE_FLAG,
@@ -40,7 +42,11 @@ from constants import (
 from core.config import is_orchestrator_enabled
 from core.metadata import load_sandbox_metadata
 from utils.agent_files_logs import if_session_exists_by_name
-from utils.cost import build_custom_headers, generate_task_title, record_task_cost
+from utils.cost import (
+    build_custom_headers,
+    generate_task_title,
+    record_task_cost,
+)
 from utils.system_notification import get_disk_warning
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -937,11 +943,13 @@ def run_agent(
             "ANTHROPIC_CUSTOM_HEADERS": custom_headers,
             "CLAUDE_PROMPT_FILE": prompt_file,
         }
+        subprocess_env["CLAUDE_TIMEOUT"] = str(CLAUDE_RUN_ORCHESTRATOR_TIMEOUT_SECONDS)
         if cycle:
             subprocess_env["NINJA_CYCLE_RUN"] = "1"
             CYCLE_STATE_FILE.unlink(missing_ok=True)
 
         print(f"System prompt enabled: {system_prompt_enabled}")
+        claude_started = time.monotonic()
         if system_prompt_enabled:
             result = subprocess.run(
                 [
@@ -954,7 +962,7 @@ def run_agent(
                     "-p",
                 ],
                 cwd=str(REPO_ROOT),
-                timeout=timeout,
+                timeout=CLAUDE_RUN_ORCHESTRATOR_TIMEOUT_SECONDS + 60,
                 capture_output=True,
                 text=True,
                 env=subprocess_env,
@@ -963,11 +971,18 @@ def run_agent(
             result = subprocess.run(
                 [str(REPO_ROOT / "claude-wrapper.sh"), *session_args, "-p"],
                 cwd=str(REPO_ROOT),
-                timeout=timeout,
+                timeout=CLAUDE_RUN_ORCHESTRATOR_TIMEOUT_SECONDS + 60,
                 capture_output=True,
                 text=True,
                 env=subprocess_env,
             )
+        capture(
+            "claude_wrapper_duration",
+            {
+                "process": "orchestrator",
+                "duration_seconds": round(time.monotonic() - claude_started, 2),
+            },
+        )
         if result.stdout:
             agent_logger.info(f"Claude output:\n{result.stdout}")
         if result.stderr:
@@ -981,7 +996,9 @@ def run_agent(
         t.start()
         t.join(timeout=30)  # wait for cost write before process exits
     except subprocess.TimeoutExpired:
-        agent_logger.warning(f"⏰ Claude CLI timed out after {timeout // 60} minutes")
+        agent_logger.warning(
+            f"⏰ Claude CLI timed out after {(CLAUDE_RUN_ORCHESTRATOR_TIMEOUT_SECONDS + 60) // 60} minutes"
+        )
     except FileNotFoundError:
         agent_logger.error("❌ Claude CLI not found!")
         agent_logger.error("Claude CLI is REQUIRED to run agents.")

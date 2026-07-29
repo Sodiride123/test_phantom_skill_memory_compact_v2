@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 _CHANNEL_ENV = "MESSAGING_CHANNEL"
 _DEFAULT_CHANNEL = "slack"
 
-_SUPPORTED_CHANNELS = ("slack", "whatsapp", "teams")
+_SUPPORTED_CHANNELS = ("slack", "whatsapp", "teams", "local")
 
 
 def resolve_messaging_channel() -> str:
@@ -77,6 +77,11 @@ def get_messaging_interface(channel: str | None = None) -> "MessagingInterface":
         from messaging.teams.interface import TeamsInterface
 
         return TeamsInterface()
+
+    if resolved == "local":
+        from messaging.local.interface import LocalInterface
+
+        return LocalInterface()
 
     # Unreachable — kept for type-checker satisfaction
     raise ValueError(f"Unhandled channel: {resolved!r}")

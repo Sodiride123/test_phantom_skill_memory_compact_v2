@@ -46,6 +46,11 @@ def get_monitor_strategy() -> "MonitorStrategy":
 
         return TeamsMonitorStrategy()
 
+    if channel == "local":
+        from processes.local.monitor_strategy import LocalMonitorStrategy
+
+        return LocalMonitorStrategy()
+
     raise ValueError(f"No monitor strategy for channel: {channel!r}")
 
 
@@ -71,5 +76,10 @@ def get_prompt_strategy() -> "PromptStrategy":
         from processes.teams.prompt_strategy import TeamsPromptStrategy
 
         return TeamsPromptStrategy()
+
+    if channel == "local":
+        from processes.local.prompt_strategy import LocalPromptStrategy
+
+        return LocalPromptStrategy()
 
     raise ValueError(f"No prompt strategy for channel: {channel!r}")

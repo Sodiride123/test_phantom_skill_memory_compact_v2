@@ -19,8 +19,14 @@ Exit codes:
 import sys
 
 import requests
-from clients.litellm_client import get_config, litellm_request, resolve_model
+from clients.litellm_client import (
+    get_config,
+    get_headers,
+    litellm_request,
+    resolve_model,
+)
 from core.config import load_agent_config
+from messaging.message_utils import audio_upload_part
 
 
 def transcribe(download_url: str) -> str:
@@ -60,8 +66,8 @@ def transcribe(download_url: str) -> str:
     transcription_resp = litellm_request(
         "POST",
         "/v1/audio/transcriptions",
-        headers={"Authorization": f"Bearer {cfg['api_key']}"},
-        files={"file": ("audio.webm", audio_resp.content, "audio/webm")},
+        headers=get_headers(),
+        files={"file": audio_upload_part(download_url, audio_resp)},
         data={"model": resolve_model("ninja-transcribe")},
         timeout=120,
     )
