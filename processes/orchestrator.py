@@ -34,13 +34,17 @@ from clients.super_ninja_client import get_thread_id
 from constants import (
     AGENT_SETTINGS_PATH,
     CLAUDE_RUN_ORCHESTRATOR_TIMEOUT_SECONDS,
+    CODEX_HARNESS_MODEL,
+    ORCHESTRATOR_SERVICE_NAME,
     SANDBOX_METADATA_PATH,
     STOP_HOOKS_FEATURE_FLAG,
     SYSTEM_PROMPT_FEATURE_FLAG,
     SYSTEM_PROMPT_PATH_ORCHESTRATOR,
 )
 from core.config import is_orchestrator_enabled
+from core.logging import get_logger
 from core.metadata import load_sandbox_metadata
+from services.orchestrator_service import run_codex_agent
 from utils.agent_files_logs import if_session_exists_by_name
 from utils.cost import (
     build_custom_headers,
@@ -64,8 +68,8 @@ BLOCKED_REVIEW_EVERY = 24
 CLAUDE_SETTINGS_FILE = Path.home() / ".claude" / "settings.json"
 
 # Settings template - variables filled from /root/.claude/settings.json
-# The Stop hook is registered for every launch (monitor included), but the
-# script does nothing unless run_agent() set NINJA_CYCLE_RUN=1 for the launch.
+# Stop + PostToolUse are always registered. Stop no-ops unless NINJA_CYCLE_RUN=1;
+# PostToolUse (monitor length) no-ops unless its PostHog FF / orchestrator gates pass.
 SETTINGS_TEMPLATE = string.Template("""{
     "env": {
         "ANTHROPIC_AUTH_TOKEN": "$auth_token",
@@ -91,6 +95,18 @@ SETTINGS_TEMPLATE = string.Template("""{
                     }
                 ]
             }
+        ],
+        "PostToolUse": [
+            {
+                "matcher": "*",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "python3 $length_hook",
+                        "timeout": 30
+                    }
+                ]
+            }
         ]
     }
 }
@@ -107,6 +123,8 @@ if os.environ.get("NINJA_TEST_MODE") != "1":
 # callers passed ``"orchestrator"`` early in startup and then ``"ninja"``
 # later, which created empty ``orchestrator_*.log`` orphan files daily.
 _LOGGER_NAME = "ninja"
+
+logger = get_logger(ORCHESTRATOR_SERVICE_NAME)
 
 
 def setup_logging(agent_name: str = "orchestrator") -> logging.Logger:
@@ -352,6 +370,7 @@ def ensure_settings_file(logger: logging.Logger = None) -> bool:
             base_url=base_url,
             model=model,
             stop_hook=str(REPO_ROOT / "orchestrator_stop_hook.py"),
+            length_hook=str(REPO_ROOT / "monitor_length_hook.py"),
         )
 
         with open(SETTINGS_FILE, "w") as f:
@@ -875,6 +894,80 @@ def run_agent(
     timeout: int = 900,
     system_prompt_enabled: bool = False,
     cycle: bool = False,
+):
+    """
+    Run agent for orchestrator task. Decides to run codex or claude based on selected model.
+    """
+    if os.environ.get("NINJA_CYCLE_RUN") == "1":
+        logger.warning(
+            "Called from inside a running cycle — refusing to launch a nested agent"
+        )
+        print("Already inside a running agent cycle — nothing to do.")
+        return
+
+    logger.info(f"Running agent {agent['name']} with task: {task}")
+
+    if prompt is None:
+        prompt = build_prompt(agent, task)
+
+    codex_harness_enabled = get_selected_model() in CODEX_HARNESS_MODEL
+
+    if codex_harness_enabled:
+        # TODO: refactor this move common code to run_agent after cleaning up run_claude_agent
+        disk_warning = get_disk_warning()
+        if disk_warning:
+            prompt += f"\n\n{disk_warning}"
+
+        # task information
+        conversation_id = get_thread_id()
+        task_id = str(uuid.uuid4())
+        title = generate_task_title(
+            prompt, task_id=task_id, conversation_id=conversation_id
+        )
+
+        logger.info(f"Selected model is a codex harness model, using Codex agent.")
+        started_at = datetime.now(timezone.utc).timestamp()
+        subprocess_env = {**os.environ}
+        try:
+            result, duration_seconds = run_codex_agent(
+                prompt, system_prompt_enabled, subprocess_env, logger
+            )
+            if result.stderr:
+                logger.warning(f"Codex stderr:\n{result.stderr}")
+            logger.info(f"Agent run completed")
+
+            capture(
+                "agent_provider_run_duration",
+                {
+                    "process": "orchestrator",
+                    "provider": "codex",
+                    "duration_seconds": duration_seconds,
+                },
+            )
+
+            t = threading.Thread(
+                target=record_task_cost,
+                args=([prompt], started_at, title),
+                kwargs={"task_id": task_id, "conversation_id": conversation_id},
+            )
+            t.start()
+            t.join(timeout=30)
+        except subprocess.TimeoutExpired:
+            logger.warning(f"Codex CLI timed out after {timeout // 60} minutes")
+        except Exception as e:
+            logger.error(f"Error running Codex agent: {e}")
+    else:
+        run_claude_agent(agent, task, prompt, timeout, system_prompt_enabled, cycle)
+
+
+# TODO: refactor this move common code to run_agent, and move this function to orcestrator_service.py
+def run_claude_agent(
+    agent: dict,
+    task: str = "",
+    prompt: str = None,
+    timeout: int = 900,
+    system_prompt_enabled: bool = False,
+    cycle: bool = False,
 ) -> None:
     """Run Claude Code for a single agent in headless autonomous mode.
 
@@ -891,12 +984,6 @@ def run_agent(
     # Nested-launch guard: if this process was started from INSIDE a cycle
     # run (the agent exploring entry points like `python -m browser`), do not
     # spawn another agent on the same session.
-    if os.environ.get("NINJA_CYCLE_RUN") == "1":
-        agent_logger.warning(
-            "⚠️ Called from inside a running cycle — refusing to launch a nested agent"
-        )
-        print("Already inside a running agent cycle — nothing to do.")
-        return
 
     agent_logger.info(f"\n{'='*60}")
     agent_logger.info(f"{agent['emoji']} Starting {agent['name']} ({agent['role']})")
@@ -977,9 +1064,10 @@ def run_agent(
                 env=subprocess_env,
             )
         capture(
-            "claude_wrapper_duration",
+            "agent_provider_run_duration",
             {
                 "process": "orchestrator",
+                "provider": "claude",
                 "duration_seconds": round(time.monotonic() - claude_started, 2),
             },
         )
@@ -1183,7 +1271,6 @@ Configuration:
     agent = get_agent_from_config()
 
     # Setup logging
-    logger = setup_logging(agent["name"].lower())
     logger.info("=" * 60)
     logger.info(f"Orchestrator starting for {agent['name']}")
     logger.info("=" * 60)
@@ -1251,12 +1338,12 @@ Configuration:
     if args.task:
         # Explicit operator task: run it directly, bypass the loop phases.
         # When the system operates normally this should not be happening
-        logger.info(f"🚀 Running explicit task: {args.task}")
+        logger.info(f"Running explicit task: {args.task}")
         run_agent(agent, args.task, system_prompt_enabled=system_prompt_enabled)
     else:
         open_issues = count_open_issues()
         num_blocked_issues = count_blocked_issues()
-        logger.info(f"📋 Actionable GitHub issues (work queue): {open_issues}")
+        logger.info(f"Actionable GitHub issues (work queue): {open_issues}")
 
         # Work + reflect run as ONE Claude invocation (see build_cycle_prompt);
         # empty queue skips the cycle entirely.
@@ -1271,7 +1358,7 @@ Configuration:
                 else build_cycle_prompt(agent)
             )
             logger.info(
-                f"🚀 Hook-chained run: work+reflect cycles until the queue "
+                f"Hook-chained run: work+reflect cycles until the queue "
                 f"empties — starting with {open_issues} open issue(s)"
             )
             run_agent(
@@ -1283,7 +1370,7 @@ Configuration:
             )
         elif ran_work and system_prompt_enabled:
             logger.info(
-                f"🚀 Phase 1 (work) and phase 2 (reflect) - a single run: completing {open_issues} open issue(s) and {num_blocked_issues} blocked issue(s)"
+                f"Phase 1 (work) and phase 2 (reflect) - a single run: completing {open_issues} open issue(s) and {num_blocked_issues} blocked issue(s)"
             )
             run_agent(
                 agent,
@@ -1292,7 +1379,7 @@ Configuration:
             )
         elif ran_work and not system_prompt_enabled:
             logger.info(
-                f"🚀 Phase 1 (work) and phase 2 (reflect) - a single run: completing {open_issues} open issue(s)"
+                f"Phase 1 (work) and phase 2 (reflect) - a single run: completing {open_issues} open issue(s)"
             )
             # 20 min: covers both phases in a single invocation (each phase
             # previously had its own 15 min window).
@@ -1303,14 +1390,14 @@ Configuration:
                 system_prompt_enabled=system_prompt_enabled,
             )
         else:
-            logger.info("💤 No actionable issues — skipping work + reflect phases")
+            logger.info("No actionable issues — skipping work + reflect phases")
 
         # Every BLOCKED_REVIEW_EVERY cycles, re-triage blocked issues so
         # resolved blockers rejoin the queue.
         if not system_prompt_enabled:
             cycle = bump_cycle_count()
             if cycle % BLOCKED_REVIEW_EVERY == 0 and count_blocked_issues() > 0:
-                logger.info(f"🚧 Cycle {cycle}: reviewing blocked issues")
+                logger.info(f"Cycle {cycle}: reviewing blocked issues")
                 run_agent(
                     agent,
                     prompt=build_blocked_review_prompt(agent),

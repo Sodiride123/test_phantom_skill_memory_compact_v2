@@ -26,13 +26,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MESSAGING_CHANNEL=""
 CHANNEL_ARGS=()   # forwarded to the channel-specific install script
 
-SUPPORTED_CHANNELS=("slack" "whatsapp" "teams")
+SUPPORTED_CHANNELS=("slack" "whatsapp" "teams" "local")
 
 usage() {
-    echo "Usage: $0 --messaging-channel <slack|whatsapp|teams> [channel-specific options]"
+    echo "Usage: $0 --messaging-channel <slack|whatsapp|teams|local> [channel-specific options]"
     echo ""
     echo "Options:"
-    echo "  --messaging-channel CHANNEL   Messaging channel (required: slack|whatsapp|teams)"
+    echo "  --messaging-channel CHANNEL   Messaging channel (required: slack|whatsapp|teams|local)"
     echo "  --channel CHANNEL             Channel name — passed to channel script"
     echo "  --channel-id CHANNEL_ID       Channel ID — passed to channel script"
     echo "  --chat-jid JID                WhatsApp JID (optional)"
@@ -44,6 +44,7 @@ usage() {
     echo "  $0 --messaging-channel slack --channel '#my-channel' --channel-id 'C0AAAAMBR1R'"
     echo "  $0 --messaging-channel whatsapp"
     echo "  $0 --messaging-channel teams --teams-id 'TEAM_ID' --channel-id 'CHANNEL_ID'"
+    echo "  $0 --messaging-channel local"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -208,11 +209,22 @@ else
     done
 
     systemctl daemon-reload
-    systemctl enable ninja-sync.service ninja.service ninja-monitor.service \
-        ninja-dashboard.service ninja-integrations.service ninja-health.service
-    systemctl start  ninja-sync.service ninja.service ninja-monitor.service \
-        ninja-dashboard.service ninja-integrations.service ninja-health.service
-    echo "  ✓ ninja-sync.service installed, enabled and started"
+
+    if [[ "$MESSAGING_CHANNEL" == "local" ]]; then
+        # Local canary — no git repo, skip ninja-sync (it waits for mcp-token).
+        systemctl disable --now ninja-sync.service 2>/dev/null || true
+        systemctl enable ninja.service ninja-monitor.service \
+            ninja-dashboard.service ninja-integrations.service ninja-health.service
+        systemctl start  ninja.service ninja-monitor.service \
+            ninja-dashboard.service ninja-integrations.service ninja-health.service
+        echo "  ✓ ninja-sync.service skipped (no git repo in local mode)"
+    else
+        systemctl enable ninja-sync.service ninja.service ninja-monitor.service \
+            ninja-dashboard.service ninja-integrations.service ninja-health.service
+        systemctl start  ninja-sync.service ninja.service ninja-monitor.service \
+            ninja-dashboard.service ninja-integrations.service ninja-health.service
+        echo "  ✓ ninja-sync.service installed, enabled and started"
+    fi
     echo "  ✓ ninja.service installed and enabled (single work cycle, restarts on failure)"
     echo "  ✓ ninja-monitor.service installed, enabled and started (continuous messaging channel watcher)"
     echo "  ✓ ninja-dashboard.service installed, enabled and started (port 9000)"
