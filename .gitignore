@@ -31,3 +31,6 @@ __pycache__/
 # ignore the system prompt files created for agent from MD
 system_prompt.txt
 system_prompt_*.txt
+
+# ignore the codex skills
+.codex/*

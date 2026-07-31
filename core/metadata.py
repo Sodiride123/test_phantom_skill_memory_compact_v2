@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 
-from constants import PH_METADATA_PATH, SANDBOX_METADATA_PATH
+from constants import DEFAULT_MODEL, PH_METADATA_PATH, SANDBOX_METADATA_PATH
 from core.config import config_cached
 
 
@@ -36,6 +36,25 @@ def load_sandbox_metadata() -> dict:
         return json.loads(SANDBOX_METADATA_PATH.read_text())
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return {}
+
+
+def get_selected_model() -> str:
+    """
+    Read litellm_selected_model from /dev/shm/sandbox_metadata.json if present.
+    Falls back to DEFAULT_MODEL ('claude-opus-4-8') if the file
+    doesn't exist, is unreadable, or doesn't contain litellm_selected_model.
+
+    Returns:
+        Model name string
+    """
+    meta = load_sandbox_metadata()
+    if not meta:
+        return DEFAULT_MODEL
+
+    model = meta.get("litellm_selected_model", "").strip()
+    if model:
+        return model
+    return DEFAULT_MODEL
 
 
 @config_cached("ph_metadata")

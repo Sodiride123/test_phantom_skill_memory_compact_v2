@@ -21,12 +21,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from agent_providers.base import AgentRunConfig
+from agent_providers.codex import CodexProvider
 from clients.posthog_client import capture, is_feature_enabled
 from clients.super_ninja_client import get_super_ninja_url, get_thread_id
 from constants import (
     CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS,
+    CODEX_HARNESS_MODEL,
+    CODEX_RUN_MONITOR_TIMEOUT_SECONDS,
     DEFAULT_TASK_TITLE,
     MONITOR_SERVICE_NAME,
+    SYSTEM_PROMPT_CODEX_PATH,
     SYSTEM_PROMPT_FEATURE_FLAG,
     SYSTEM_PROMPT_PATH,
     SYSTEM_PROMPT_PATH_SINGLE,
@@ -42,6 +47,7 @@ from utils.cost import (
 )
 from utils.system_notification import get_disk_warning
 
+from ninja.core.metadata import get_selected_model
 from ninja.tools.claude_utils import get_api_error_in_session
 
 logger = get_logger(MONITOR_SERVICE_NAME)
@@ -152,58 +158,20 @@ def build_welcome_message(agent: dict) -> str:
     )
 
 
-# ---------------------------------------------------------------------------
-# Prompt / CLI command helpers
-# ---------------------------------------------------------------------------
-
-
-def say_cmd(thread_ts: Optional[str] = None) -> str:
-    """Return the channel-appropriate CLI say command for Claude's prompt.
-
-    Reads ``MESSAGING_CHANNEL`` env-var (default: ``slack``) so the command
-    embedded in Claude's prompt always matches the active adapter.
-    """
-    channel = os.environ.get("MESSAGING_CHANNEL", "slack")
-    base = f"python messaging/{channel}/interface.py say"
-    if thread_ts:
-        return f'{base} "message" -t {thread_ts}'
-    return f'{base} "message"'
-
-
-# ---------------------------------------------------------------------------
-# Claude batch dispatch
-# ---------------------------------------------------------------------------
-
-
-def run_batched_response(
+def build_batch_prompt(
     agent: dict,
     pending_messages: list,
-    messaging_say_fn,
-) -> bool:
-    """Send all pending messages to Claude in a single prompt.
+    system_prompt_enabled: bool,
+) -> str:
+    """Assemble the single batched prompt for a set of pending messages.
 
-    Args:
-        agent:            Agent configuration dict.
-        pending_messages: List of message dicts (user, text, timestamp,
-                          thread_ts, type, audio_files).
-        messaging_say_fn: Callable used to post the out-of-credits notification
-                          (typically ``_get_messaging().say``). Passed in to
-                          avoid a circular import with monitor.py.
-
-    Returns:
-        True if Claude successfully processed the messages.
+    Shared by the Claude and Codex monitor runners so the copy stays in one
+    place. (Extracted verbatim from the original inline body of
+    run_batched_response.)
     """
-    if not pending_messages:
-        return True
-
     agent_name = agent["name"]
     agent_role = agent["role"]
     agent_emoji = agent["emoji"]
-
-    system_prompt_enabled = is_feature_enabled(
-        SYSTEM_PROMPT_FEATURE_FLAG, default=False
-    )
-    logger.info(f"System prompt feature enabled: {system_prompt_enabled}")
 
     messages_text = ""
     for i, msg in enumerate(pending_messages, 1):
@@ -219,7 +187,8 @@ def run_batched_response(
             if not system_prompt_enabled:
                 messages_text += (
                     f"Post the result with: {reply_hint}\n"
-                    "(See agent-docs/CRON.md. Execute the prompt; do not ask for confirmation.)\n"
+                    "(See agent-docs/CRON.md. Execute the prompt; do not ask "
+                    "for confirmation.)\n"
                 )
             continue
 
@@ -227,7 +196,7 @@ def run_batched_response(
             thread_info = (
                 f'\n   Thread: {msg["thread_ts"]}'
                 if msg.get("thread_ts")
-                else f"\n   Channel: main"
+                else "\n   Channel: main"
             )
         else:
             thread_info = (
@@ -282,17 +251,74 @@ def run_batched_response(
         )
 
     if system_prompt_enabled:
-        prompt = messages_text
-    else:
-        prompt = (
-            f"You are {agent_name} {agent_emoji}, the {agent_role}.\n\n"
-            "We are running you as a monitor agent, your specification is in "
-            "agent-docs/MONITOR.md. For scheduled cron items see agent-docs/CRON.md.\n\n"
-            f"The current time is {time.strftime('%Y-%m-%d %H:%M:%S')}. "
-            f"You have {len(pending_messages)} message(s) that need your response. "
-            f"Read ALL of them and respond to EACH ONE.\n\n"
-            f"{messages_text}"
-        )
+        return messages_text
+
+    return (
+        f"You are {agent_name} {agent_emoji}, the {agent_role}.\n\n"
+        "We are running you as a monitor agent, your specification is in "
+        "agent-docs/MONITOR.md. For scheduled cron items see agent-docs/CRON.md.\n\n"
+        f"The current time is {time.strftime('%Y-%m-%d %H:%M:%S')}. "
+        f"You have {len(pending_messages)} message(s) that need your response. "
+        f"Read ALL of them and respond to EACH ONE.\n\n"
+        f"{messages_text}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Prompt / CLI command helpers
+# ---------------------------------------------------------------------------
+
+
+def say_cmd(thread_ts: Optional[str] = None) -> str:
+    """Return the channel-appropriate CLI say command for Claude's prompt.
+
+    Reads ``MESSAGING_CHANNEL`` env-var (default: ``slack``) so the command
+    embedded in Claude's prompt always matches the active adapter.
+    """
+    channel = os.environ.get("MESSAGING_CHANNEL", "slack")
+    base = f"python messaging/{channel}/interface.py say"
+    if thread_ts:
+        return f'{base} "message" -t {thread_ts}'
+    return f'{base} "message"'
+
+
+# ---------------------------------------------------------------------------
+# Claude batch dispatch
+# ---------------------------------------------------------------------------
+
+
+def run_batched_response(
+    agent: dict,
+    pending_messages: list,
+    messaging_say_fn,
+) -> bool:
+    """Send all pending messages to Claude in a single prompt.
+
+    Args:
+        agent:            Agent configuration dict.
+        pending_messages: List of message dicts (user, text, timestamp,
+                          thread_ts, type, audio_files).
+        messaging_say_fn: Callable used to post the out-of-credits notification
+                          (typically ``_get_messaging().say``). Passed in to
+                          avoid a circular import with monitor.py.
+
+    Returns:
+        True if Claude successfully processed the messages.
+    """
+    if not pending_messages:
+        return True
+
+    system_prompt_enabled = is_feature_enabled(
+        SYSTEM_PROMPT_FEATURE_FLAG, default=False
+    )
+    logger.info(f"System prompt feature enabled: {system_prompt_enabled}")
+    model = get_selected_model()
+    codex_harness_enabled = model in CODEX_HARNESS_MODEL
+    logger.info(
+        f"Selected model: {model}, Codex harness enabled: {codex_harness_enabled}"
+    )
+
+    prompt = build_batch_prompt(agent, pending_messages, system_prompt_enabled)
 
     disk_warning = get_disk_warning()
     if disk_warning:
@@ -331,73 +357,43 @@ def run_batched_response(
 
     prompt_file = None
     try:
-        if not if_session_exists_by_name("monitor"):
-            session_args = ["-n", "monitor"]
-        else:
-            session_args = ["-r", "monitor"]
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".txt", delete=False, encoding="utf-8"
-        ) as f:
-            f.write(prompt)
-            prompt_file = f.name
-            subprocess_env["CLAUDE_PROMPT_FILE"] = prompt_file
-            subprocess_env["CLAUDE_TIMEOUT"] = str(CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS)
-        claude_started = time.monotonic()
-        if system_prompt_enabled:
-            system_prompt_path = (
-                SYSTEM_PROMPT_PATH
-                if is_orchestrator_enabled()
-                else SYSTEM_PROMPT_PATH_SINGLE
+        model = get_selected_model()
+        if codex_harness_enabled:
+            logger.info(
+                f"Selected model {model} is a Codex harness model, using Codex for batch response"
             )
-            result = subprocess.run(
-                [
-                    str(_REPO_ROOT / "claude-wrapper.sh"),
-                    *session_args,
-                    "--system-prompt-file",
-                    f"{system_prompt_path}",
-                    "--tools",
-                    "Bash,Edit,Read,Skill,Write",
-                    "-p",
-                ],
-                cwd=str(_REPO_ROOT),
-                capture_output=True,
-                text=True,
-                timeout=CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS + 60,
-                env=subprocess_env,
+            result, duration = get_codex_response(
+                subprocess_env, system_prompt_enabled, prompt
             )
         else:
-            result = subprocess.run(
-                [str(_REPO_ROOT / "claude-wrapper.sh"), *session_args, "-p"],
-                cwd=str(_REPO_ROOT),
-                capture_output=True,
-                text=True,
-                timeout=CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS + 60,
-                env=subprocess_env,
+            logger.info(f"Selected model is {model}, using Claude for batch response")
+            result, duration = get_claude_response(
+                subprocess_env, system_prompt_enabled, prompt, prompt_file
             )
+            # Check for claude api error in claude project logs
+            try:
+                api_error = get_api_error_in_session("monitor", MONITOR_SERVICE_NAME)
+            except Exception as e:
+                logger.warning(f"Could not run API-error transcript check: {e}")
+
+            if api_error:
+                logger.error(f"Detected API error in Claude session logs: {api_error}")
+                capture(
+                    "claude_api_error",
+                    {
+                        "process": "monitor",
+                        "task_id": task_id,
+                        "conversation_id": conversation_id,
+                    },
+                )
         capture(
-            "claude_wrapper_duration",
+            "agent_provider_run_duration",
             {
                 "process": "monitor",
-                "duration_seconds": round(time.monotonic() - claude_started, 2),
+                "provider": "codex" if codex_harness_enabled else "claude",
+                "duration_seconds": duration,
             },
         )
-        # Check for claude api error in claude project logs
-        try:
-            api_error = get_api_error_in_session("monitor", MONITOR_SERVICE_NAME)
-        except Exception as e:
-            logger.warning(f"Could not run API-error transcript check: {e}")
-
-        if api_error:
-            logger.error(f"Detected API error in Claude session logs: {api_error}")
-            capture(
-                "claude_api_error",
-                {
-                    "process": "monitor",
-                    "task_id": task_id,
-                    "conversation_id": conversation_id,
-                },
-            )
-
         output = result.stdout + result.stderr
         success_count = (
             output.count("Message sent")
@@ -416,16 +412,16 @@ def run_batched_response(
             raise RunOutOfCreditsException
 
         capture(
-            "ninja batch response completed",
+            "Agent provider batch response completed",
             {"success": True, "response_count": success_count},
         )
         if success_count > 0:
             logger.info(
-                f"Claude processed batch — {success_count} response indicator(s)"
+                f"Agent provider processed batch — {success_count} response indicator(s)"
             )
         else:
             logger.warning(
-                f"Claude batch response (may have posted): {output[:300]}...",
+                f"Agent provider batch response (may have posted): {output[:300]}...",
             )
         return True
 
@@ -463,3 +459,74 @@ def run_batched_response(
     finally:
         if prompt_file:
             os.unlink(prompt_file)
+
+
+def get_claude_response(
+    env: dict, system_prompt_enabled: bool, prompt: str, prompt_file: str
+):
+    if not if_session_exists_by_name("monitor"):
+        session_args = ["-n", "monitor"]
+    else:
+        session_args = ["-r", "monitor"]
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".txt", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(prompt)
+        prompt_file = f.name
+        env["CLAUDE_PROMPT_FILE"] = prompt_file
+        env["CLAUDE_TIMEOUT"] = str(CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS)
+    claude_started = time.monotonic()
+    if system_prompt_enabled:
+        system_prompt_path = (
+            SYSTEM_PROMPT_PATH
+            if is_orchestrator_enabled()
+            else SYSTEM_PROMPT_PATH_SINGLE
+        )
+        result = subprocess.run(
+            [
+                str(_REPO_ROOT / "claude-wrapper.sh"),
+                *session_args,
+                "--system-prompt-file",
+                f"{system_prompt_path}",
+                "--tools",
+                "Bash,Edit,Read,Skill,Write",
+                "-p",
+            ],
+            cwd=str(_REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS + 60,
+            env=env,
+        )
+    else:
+        result = subprocess.run(
+            [str(_REPO_ROOT / "claude-wrapper.sh"), *session_args, "-p"],
+            cwd=str(_REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS + 60,
+            env=env,
+        )
+    return result, round(time.monotonic() - claude_started, 2)
+
+
+def get_codex_response(env: dict, system_prompt_enabled: bool, prompt: str):
+
+    spec = AgentRunConfig(
+        prompt=prompt,
+        system_prompt_path=SYSTEM_PROMPT_CODEX_PATH,
+        system_prompt_enabled=system_prompt_enabled,
+        tools=["Bash", "Edit", "Read", "Write"],
+        timeout_seconds=CODEX_RUN_MONITOR_TIMEOUT_SECONDS,
+        session_name="monitor",
+        cwd=_REPO_ROOT,
+        env=env,
+        process_label="monitor",
+    )
+
+    provider = CodexProvider()
+    provider.setup(logger)
+
+    run_started = time.monotonic()
+    result = provider.run(spec, logger)
+    return result, round(time.monotonic() - run_started, 2)

@@ -99,7 +99,12 @@ from clients.agent_event_cache_client import (
     AgentEventCacheClient,
     GetMessagesRequest,
 )
-from constants import AGENT_SETTINGS_PATH, MONITOR_SERVICE_NAME
+from clients.posthog_client import is_feature_enabled
+from constants import (
+    AGENT_SETTINGS_PATH,
+    MONITOR_SERVICE_NAME,
+    SLACK_USER_ID_NAME_FEATURE_FLAG,
+)
 from core.config import load_agent_config, save_agent_messages
 from core.logging import get_logger
 from core.metadata import load_sandbox_metadata
@@ -110,6 +115,13 @@ from messaging.message_utils import (
     resolve_reply_thread,
 )
 from messaging.slack.slack_md_blocks import md_to_slack_blocks
+from messaging.slack.utils import (
+    USER_CACHE_TTL_SECONDS,
+    collect_unresolved_user_ids,
+    display_name_from_slack_user,
+    resolve_slack_mentions,
+    resolve_slack_sender_name,
+)
 
 logger = get_logger(MONITOR_SERVICE_NAME)
 
@@ -960,6 +972,15 @@ class SlackClient:
             Dict with 'ok', 'user', 'team', 'url' on success
         """
         return self._api_call("auth.test", token)
+
+    def get_user(self, token: str, user_id: str) -> Dict:
+        """
+        Fetch a single user profile.
+
+        API Method: users.info
+        Required Scopes: users:read
+        """
+        return self._api_call("users.info", token, {"user": user_id})
 
     def get_scopes(self, token: str) -> List[str]:
         """
@@ -2904,6 +2925,54 @@ class SlackInterface(MessagingInterface):
         self.client = SlackClient(self.tokens)
         self._token = self.tokens.bot_token
         self._own_identity_cache: Optional[Dict] = None
+        self._user_cache: Dict[str, str] = {}
+        self._user_cache_expires_at: float = 0.0
+        self._users_read_warning_logged_at: float = 0.0
+
+    def _log_users_read_missing_once(self) -> None:
+        now = time.time()
+        if now - self._users_read_warning_logged_at < USER_CACHE_TTL_SECONDS:
+            return
+        self._users_read_warning_logged_at = now
+        logger.warning(
+            "Slack users.info failed (missing users:read or auth error); "
+            "falling back to raw user IDs for unresolved senders"
+        )
+
+    def _prime_user_cache_if_stale(self) -> None:
+        now = time.time()
+        if self._user_cache and now < self._user_cache_expires_at:
+            return
+        try:
+            for member in self.list_users():
+                user_id = member.get("id")
+                if not user_id:
+                    continue
+                name = display_name_from_slack_user(member)
+                if name:
+                    self._user_cache[user_id] = name
+            self._user_cache_expires_at = now + USER_CACHE_TTL_SECONDS
+        except Exception:
+            logger.exception("Failed to prime Slack user cache from channel members")
+
+    def _resolve_user(self, user_id: str) -> str:
+        if not user_id:
+            return ""
+        cached = self._user_cache.get(user_id)
+        if cached:
+            return cached
+        if not self.is_connected or not self._token:
+            return user_id
+        result = self.client.get_user(self._token, user_id)
+        if not result.get("ok"):
+            error = result.get("error", "")
+            if error in ("missing_scope", "not_authed", "invalid_auth"):
+                self._log_users_read_missing_once()
+            return user_id
+        user = result.get("user") or {}
+        name = display_name_from_slack_user(user) or user_id
+        self._user_cache[user_id] = name
+        return name
 
     @property
     def default_channel(self) -> Optional[str]:
@@ -3496,6 +3565,14 @@ class SlackInterface(MessagingInterface):
             except Exception:
                 pass
 
+        resolve_users = is_feature_enabled(
+            SLACK_USER_ID_NAME_FEATURE_FLAG, default=False
+        )
+        if resolve_users:
+            unresolved = collect_unresolved_user_ids(candidates)
+            if unresolved:
+                self._prime_user_cache_if_stale()
+
         # Unified loop — identical logic for main-channel messages and replies.
         for candidate, from_replies in candidates:
             cand_ts = candidate.get("ts", "") or candidate.get("timestamp", "")
@@ -3543,20 +3620,43 @@ class SlackInterface(MessagingInterface):
             # Step 4: Classify and queue.
             attachments = extract_file_attachments(candidate)
             msg_type = classify_message_type(attachments, is_reply)
-            user = candidate.get("user", "") or candidate.get("username", "Unknown")
-            pending_messages.append(
-                {
-                    "user": user,
-                    "text": candidate.get("text", ""),
-                    "timestamp": cand_ts,
-                    "thread_ts": cand_thread_ts if is_reply else cand_ts,
-                    "type": msg_type,
-                    "audio_files": attachments["audio_files"],
-                    "image_files": attachments["image_files"],
-                    "pdf_files": attachments["pdf_files"],
-                    "other_files": attachments["other_files"],
-                }
-            )
+            user_id = candidate.get("user") or ""
+            if resolve_users:
+                display_name = resolve_slack_sender_name(candidate, self._resolve_user)
+                message_text = resolve_slack_mentions(
+                    candidate.get("text", ""),
+                    self._resolve_user,
+                    self._user_cache,
+                )
+                pending_messages.append(
+                    {
+                        "user": display_name,
+                        "user_id": user_id,
+                        "text": message_text,
+                        "timestamp": cand_ts,
+                        "thread_ts": cand_thread_ts if is_reply else cand_ts,
+                        "type": msg_type,
+                        "audio_files": attachments["audio_files"],
+                        "image_files": attachments["image_files"],
+                        "pdf_files": attachments["pdf_files"],
+                        "other_files": attachments["other_files"],
+                    }
+                )
+            else:
+                display_name = user_id or candidate.get("username", "Unknown")
+                pending_messages.append(
+                    {
+                        "user": display_name,
+                        "text": candidate.get("text", ""),
+                        "timestamp": cand_ts,
+                        "thread_ts": cand_thread_ts if is_reply else cand_ts,
+                        "type": msg_type,
+                        "audio_files": attachments["audio_files"],
+                        "image_files": attachments["image_files"],
+                        "pdf_files": attachments["pdf_files"],
+                        "other_files": attachments["other_files"],
+                    }
+                )
 
             # Step 5: Bookkeeping for replies.
             if reply_id:

@@ -26,7 +26,10 @@ SYSTEM_PROMPT_PATH_SINGLE = Path(__file__).parent / "system_prompt_single.txt"
 SYSTEM_PROMPT_PATH_ORCHESTRATOR = (
     Path(__file__).parent / "system_prompt_orchestrator.txt"
 )
-
+SYSTEM_PROMPT_CODEX_PATH = (
+    Path(__file__).parent / "agent-docs" / "SYSTEM_PROMPT_CODEX.md"
+)
+AGENTS_MD_CODEX_PATH = Path(__file__).parent / "agent-docs" / "AGENTS.md"
 SYSTEM_PROMPT_FEATURE_FLAG = "system-prompt-phantom"
 # Stop-hook chained orchestrator cycles (see orchestrator_stop_hook.py)
 STOP_HOOKS_FEATURE_FLAG = "orchestrator-stop-hooks"
@@ -38,3 +41,18 @@ ORCHESTRATOR_SERVICE_NAME = "orchestrator"
 # Timeout passed to the claude binary
 CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS = 7200  # 2 hours
 CLAUDE_RUN_ORCHESTRATOR_TIMEOUT_SECONDS = 10800  # 3 hours
+
+CODEX_RUN_ORCHESTRATOR_TIMEOUT_SECONDS = 7200  # 2 hours
+CODEX_RUN_MONITOR_TIMEOUT_SECONDS = 7200
+
+DEFAULT_MODEL = "claude-opus-4-8"
+
+CODEX_HARNESS_MODEL = ["gpt-5.6-sol"]
+MONITOR_LENGTH_HOOK_FEATURE_FLAG = "monitorLengthHook"
+SLACK_USER_ID_NAME_FEATURE_FLAG = "slackUserIDName"
+MONITOR_TURNS_THRESHOLD = 60
+HANDOFF_CONTEXT = (
+    "The task is taking too many steps to solve. Please summarize your current "
+    "progress, report to the user and create a github issue so the background "
+    "agent can work on it"
+)

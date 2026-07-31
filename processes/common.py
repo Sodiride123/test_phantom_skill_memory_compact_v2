@@ -198,17 +198,20 @@ def maybe_launch_orchestrator() -> bool:
     Always launches via systemd (ninja.service). See agent-docs/LOOP.md.
     """
     if not is_orchestrator_enabled():
-        print("⏸️ Orchestrator disabled via config — skipping launch", flush=True)
+        print("Orchestrator disabled via config — skipping launch", flush=True)
+        logger.info("Orchestrator disabled via config — skipping launch")
         return False
 
     if is_orchestrator_running():
+        logger.info("Orchestrator already running — skipping launch")
         return False
     open_issues = count_open_issues()
     if open_issues <= 0:
+        logger.info("No open issues — skipping orchestrator launch")
         return False
 
-    print(
-        f"\U0001f680 {open_issues} open issue(s) and orchestrator idle \u2014 launching",
+    logger.info(
+        f"{open_issues} open issue(s) and orchestrator idle launching",
         flush=True,
     )
     try:
@@ -219,16 +222,15 @@ def maybe_launch_orchestrator() -> bool:
             timeout=30,
         )
         if result.returncode == 0:
-            print(f"\u2705 Started {ORCHESTRATOR_SERVICE} via systemd", flush=True)
+            logger.info(f"Started {ORCHESTRATOR_SERVICE} via systemd")
             return True
-        print(
-            f"\u26a0\ufe0f systemctl start {ORCHESTRATOR_SERVICE} failed "
+        logger.info(
+            f"Systemctl start {ORCHESTRATOR_SERVICE} failed "
             f"({result.returncode}): {result.stderr.strip()}",
-            flush=True,
         )
         return False
     except (OSError, subprocess.SubprocessError) as e:
-        print(f"\u26a0\ufe0f Could not launch {ORCHESTRATOR_SERVICE}: {e}", flush=True)
+        logger.error(f"\u26a0\ufe0f Could not launch {ORCHESTRATOR_SERVICE}: {e}")
         return False
 
 
@@ -270,6 +272,7 @@ class PollingMonitorStrategy(MonitorStrategy):
 
     def run(self) -> int:  # noqa: C901 — long but linear; splitting hurts readability
         # Wire SIGHUP -> refresh all config caches (config hot-reload without restart)
+        logger.info("Starting monitor process...")
         install_sighup_handler()
 
         parser = argparse.ArgumentParser(
@@ -287,8 +290,12 @@ class PollingMonitorStrategy(MonitorStrategy):
         )
         args = parser.parse_args()
 
+        logger.info(f"Monitor starting with args: {args}")
+
         config = load_agent_config()
         agent_id = args.agent or config.get("default_agent", "").lower()
+
+        logger.info(f"Resolved agent_id: {agent_id} (from args or config)")
 
         if not agent_id or agent_id not in AGENTS:
             print("\u274c No valid agent configured!", file=sys.stderr)
@@ -299,6 +306,10 @@ class PollingMonitorStrategy(MonitorStrategy):
 
         agent = AGENTS[agent_id]
         channel = resolve_messaging_channel()
+
+        logger.info(
+            f"Starting monitor for agent '{agent_id}' ({agent['name']}) on channel '{channel}'"
+        )
 
         print(
             f"""
@@ -313,6 +324,11 @@ class PollingMonitorStrategy(MonitorStrategy):
 \u255a{'=' * 60}\u255d
 """,
             flush=True,
+        )
+
+        logger.info(
+            f"Monitor config: interval={args.interval}s, max_runtime={MAX_RUNTIME}s, "
+            f"mentions={agent['mentions']}"
         )
 
         iface = get_messaging_interface()
@@ -403,6 +419,8 @@ class PollingMonitorStrategy(MonitorStrategy):
                         agent_data,
                         pending_messages,
                     )
+
+                logger.info(f"Collected {len(pending_messages)} pending message(s)")
 
                 # --- inject due cron jobs ---
                 for job in get_due_cron_messages(time.time()):
