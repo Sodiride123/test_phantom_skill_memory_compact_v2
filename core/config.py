@@ -44,11 +44,16 @@ from typing import Any, Callable, Dict, Optional, TypeVar
 
 from constants import (
     AGENT_SETTINGS_PATH,
+    CODEX_SETTINGS_FILE,
+    COMMON_LOGGER_NAME,
     DEFAULT_ORCHESTRATOR_CONFIG,
+    MONITOR_SERVICE_NAME,
     ORCHESTRATOR_CONFIG_PATH,
+    ORCHESTRATOR_SERVICE_NAME,
 )
 
 _logger = logging.getLogger(__name__)
+logger = logging.getLogger(COMMON_LOGGER_NAME)
 
 _SENTINEL = object()
 _registry: Dict[str, dict] = {}  # {"name": {"fn": callable, "value": Any}}
@@ -223,7 +228,7 @@ def record_sent_message(msg_id: str, keep: int = 500) -> None:
         ids.append(msg_id)
         path.write_text(json.dumps({"sent": ids[-keep:]}))
     except Exception as e:
-        print(f"⚠️ Warning: Could not record sent message: {e}", file=sys.stderr)
+        logger.warning(f"⚠️ Warning: Could not record sent message: {e}")
 
 
 def load_agent_messages() -> dict:
@@ -245,7 +250,7 @@ def save_agent_messages(data: dict) -> None:
         data["seen_replies"] = data.get("seen_replies", [])[-100:]
         path.write_text(json.dumps(data))
     except Exception as e:
-        print(f"⚠️ Warning: Could not save agent messages: {e}", file=sys.stderr)
+        logger.warning(f"Warning: Could not save agent messages: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -269,9 +274,8 @@ def load_orchestrator_config() -> dict:
                 json.dumps(config, indent=2), encoding="utf-8"
             )
     except Exception as e:
-        print(
-            f"⚠️ Warning: Could not read orchestrator config, setting it to default: {e}",
-            file=sys.stderr,
+        logger.warning(
+            f"Warning: Could not read orchestrator config, setting it to default: {e}"
         )
     return config
 
@@ -293,3 +297,41 @@ def is_orchestrator_enabled(config: dict = None) -> bool:
     if config.get("enabled", True):
         return True
     return False
+
+
+# ---------------------------------------------------------------------------
+# Codex settings
+# ---------------------------------------------------------------------------
+@config_cached("codex_settings")
+def load_codex_settings() -> dict:
+    """Load Codex settings from .codex/settings.json."""
+    try:
+        if not CODEX_SETTINGS_FILE.exists():
+            CODEX_SETTINGS_FILE.write_text(
+                json.dumps(
+                    {
+                        "session_id": {
+                            MONITOR_SERVICE_NAME: None,
+                            ORCHESTRATOR_SERVICE_NAME: None,
+                        }
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+        return json.loads(CODEX_SETTINGS_FILE.read_text())
+
+    except Exception as e:
+        logger.warning(f"Could not read Codex config: {e}")
+    return {}
+
+
+def save_codex_settings(service_name, session_id) -> dict:
+    """Persist Codex settings to disk with timestamp. Returns the written config."""
+    config = load_codex_settings()
+    if "session_id" not in config:
+        config["session_id"] = {}
+    config["session_id"][service_name] = session_id
+    CODEX_SETTINGS_FILE.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    refresh_config("codex_settings")
+    return config

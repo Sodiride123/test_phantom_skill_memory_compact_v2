@@ -26,8 +26,12 @@ SYSTEM_PROMPT_PATH_SINGLE = Path(__file__).parent / "system_prompt_single.txt"
 SYSTEM_PROMPT_PATH_ORCHESTRATOR = (
     Path(__file__).parent / "system_prompt_orchestrator.txt"
 )
-SYSTEM_PROMPT_CODEX_PATH = (
-    Path(__file__).parent / "agent-docs" / "SYSTEM_PROMPT_CODEX.md"
+SYSTEM_PROMPT_CODEX_PATH = Path(__file__).parent / "system_prompt_codex.txt"
+SYSTEM_PROMPT_SINGLE_CODEX_PATH = (
+    Path(__file__).parent / "system_prompt_single_codex.txt"
+)
+SYSTEM_PROMPT_ORCHESTRATOR_CODEX_PATH = (
+    Path(__file__).parent / "system_prompt_orchestrator_codex.txt"
 )
 AGENTS_MD_CODEX_PATH = Path(__file__).parent / "agent-docs" / "AGENTS.md"
 SYSTEM_PROMPT_FEATURE_FLAG = "system-prompt-phantom"
@@ -56,3 +60,9 @@ HANDOFF_CONTEXT = (
     "progress, report to the user and create a github issue so the background "
     "agent can work on it"
 )
+CODEX_CONFIG_DIR = Path.home() / ".codex"
+CODEX_LOG_DIR = CODEX_CONFIG_DIR / "sessions"
+CODEX_CONFIG_FILE = CODEX_CONFIG_DIR / "config.toml"
+CODEX_SETTINGS_FILE = Path(__file__).parent / "codex_settings.json"
+
+COMMON_LOGGER_NAME = "common"

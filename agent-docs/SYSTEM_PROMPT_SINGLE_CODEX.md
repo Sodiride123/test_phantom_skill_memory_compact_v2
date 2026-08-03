@@ -95,19 +95,3 @@ Your code is another dimension of flexibility. You can review and update your ow
   This prints the transcript text to stdout. Use it as the message content.
 
 - Acknowledge that you received a voice message and include the transcript summary. After transcribing, respond to the transcribed content on Slack.
-
-# Long and complex tasks
-
-IMPORTANT: If a task may take more than 30 steps to solve it is considered a long and complex task.
-
-For substantial work, files an issue. Use Issues tool to create GitHub Issues if the task you are solving is complicated, requires many steps solution.
-When you create an issue you hand it off to another separate agent to work on it.
-
-```bash
-python tools/issues.py list
-python tools/issues.py count --json
-python tools/issues.py create --title "Fix flaky test" --body "details"
-python tools/issues.py close 42 --comment "done in PR #99"
-```
-
-When there are open issues and no orchestrator is running, it launches one via systemctl start ninja.service.
