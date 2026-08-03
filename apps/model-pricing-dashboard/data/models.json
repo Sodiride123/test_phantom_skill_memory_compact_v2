@@ -1,6 +1,6 @@
 {
-  "last_collected": "2026-07-27T09:02:02Z",
-  "generated_at": "2026-07-27T09:02:02.772653+00:00",
+  "last_collected": "2026-08-03T09:02:53Z",
+  "generated_at": "2026-08-03T09:02:53.935020+00:00",
   "currency": "USD",
   "price_unit": "per 1,000,000 tokens",
   "provider_count": 6,
@@ -176,9 +176,9 @@
       "provider": "OpenAI",
       "name": "GPT-5.6 Luna",
       "family": "GPT-5.6",
-      "input_price": 1.0,
-      "cached_price": 0.1,
-      "output_price": 6.0,
+      "input_price": 0.2,
+      "cached_price": 0.02,
+      "output_price": 1.2,
       "price_unit": "USD per 1M tokens",
       "context_window": 1050000,
       "modalities": [
@@ -295,9 +295,9 @@
       "provider": "OpenAI",
       "name": "GPT-5.6 Terra",
       "family": "GPT-5.6",
-      "input_price": 2.5,
-      "cached_price": 0.25,
-      "output_price": 15.0,
+      "input_price": 2.0,
+      "cached_price": 0.2,
+      "output_price": 12.0,
       "price_unit": "USD per 1M tokens",
       "context_window": 1050000,
       "modalities": [
@@ -1197,8 +1197,8 @@
   "refresh": {
     "method": "Tavily extract (extract_depth=advanced) of aipricing.guru",
     "scraped_rows": 4,
-    "matched": 2,
-    "stale": 37,
+    "matched": 1,
+    "stale": 38,
     "stale_models": [
       "GPT-4o mini",
       "GPT-5.4 nano",
@@ -1236,6 +1236,7 @@
       "Mixtral 8x7B",
       "Mistral Medium 3.5",
       "Pixtral Large",
+      "DeepSeek V4 Flash",
       "DeepSeek V4 Pro"
     ]
   },
@@ -1338,8 +1339,36 @@
     ],
     "drift_threshold_pct": 25.0,
     "drift": [],
-    "drift_vs_previous_run": [],
-    "history_compared_to": "2026-07-20T09:02:37Z",
+    "drift_vs_previous_run": [
+      {
+        "model": "OpenAI/GPT-5.6 Luna",
+        "field": "input_price",
+        "from": 1.0,
+        "to": 0.2,
+        "pct": 80.0,
+        "tier": "official",
+        "vs": "2026-07-27T09:02:02Z"
+      },
+      {
+        "model": "OpenAI/GPT-5.6 Luna",
+        "field": "cached_price",
+        "from": 0.1,
+        "to": 0.02,
+        "pct": 80.0,
+        "tier": "official",
+        "vs": "2026-07-27T09:02:02Z"
+      },
+      {
+        "model": "OpenAI/GPT-5.6 Luna",
+        "field": "output_price",
+        "from": 6.0,
+        "to": 1.2,
+        "pct": 80.0,
+        "tier": "official",
+        "vs": "2026-07-27T09:02:02Z"
+      }
+    ],
+    "history_compared_to": "2026-07-27T09:02:02Z",
     "not_scraped": {
       "Mistral": "mistral.ai/pricing lists subscription plans only, not API token prices \u2014 kept on aggregator/fallback"
     }
