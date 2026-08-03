@@ -6,6 +6,7 @@
 
 # Sensitive files
 settings.json
+codex_settings.json
 .env*
 services/whatsapp/memory/
 

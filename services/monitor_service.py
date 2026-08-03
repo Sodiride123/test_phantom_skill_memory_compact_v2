@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 from agent_providers.base import AgentRunConfig
-from agent_providers.codex import CodexProvider
+from agent_providers.codex.codex_provider import CodexProvider
 from clients.posthog_client import capture, is_feature_enabled
 from clients.super_ninja_client import get_super_ninja_url, get_thread_id
 from constants import (
@@ -35,6 +35,7 @@ from constants import (
     SYSTEM_PROMPT_FEATURE_FLAG,
     SYSTEM_PROMPT_PATH,
     SYSTEM_PROMPT_PATH_SINGLE,
+    SYSTEM_PROMPT_SINGLE_CODEX_PATH,
 )
 from core.config import is_orchestrator_enabled
 from core.logging import get_logger
@@ -324,7 +325,7 @@ def run_batched_response(
     if disk_warning:
         prompt += f"\n\n{disk_warning}"
 
-    logger.info(f"Sending {len(pending_messages)} message(s) to Claude...")
+    logger.info(f"Sending {len(pending_messages)} message(s) to Agent...")
 
     texts = [msg.get("text", "") for msg in pending_messages if msg.get("text")]
     started_at = datetime.now(timezone.utc).timestamp()
@@ -512,9 +513,17 @@ def get_claude_response(
 
 def get_codex_response(env: dict, system_prompt_enabled: bool, prompt: str):
 
+    system_prompt_path = ""
+    if system_prompt_enabled:
+        system_prompt_path = (
+            SYSTEM_PROMPT_CODEX_PATH
+            if is_orchestrator_enabled()
+            else SYSTEM_PROMPT_SINGLE_CODEX_PATH
+        )
+
     spec = AgentRunConfig(
         prompt=prompt,
-        system_prompt_path=SYSTEM_PROMPT_CODEX_PATH,
+        system_prompt_path=system_prompt_path,
         system_prompt_enabled=system_prompt_enabled,
         tools=["Bash", "Edit", "Read", "Write"],
         timeout_seconds=CODEX_RUN_MONITOR_TIMEOUT_SECONDS,

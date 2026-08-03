@@ -4,14 +4,14 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from constants import AGENTS_MD_CODEX_PATH
-
+from ninja.agent_providers.base import AgentProvider, AgentRunConfig, AgentRunResult
+from ninja.agent_providers.codex.codex_utils import get_latest_traces_session_id
 from ninja.clients.litellm_client import get_config
+from ninja.constants import AGENTS_MD_CODEX_PATH
+from ninja.core.config import load_codex_settings, save_codex_settings
 from ninja.core.metadata import get_selected_model
 
-from .base import AgentProvider, AgentRunConfig, AgentRunResult
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CODEX_CONFIG_DIR = Path.home() / ".codex"
 CODEX_CONFIG_FILE = CODEX_CONFIG_DIR / "config.toml"
 
@@ -20,12 +20,16 @@ class CodexProvider(AgentProvider):
     name = "codex"
 
     def setup(self, logger: logging.Logger) -> bool:
+        """
+        Setup codex cli and setup skills.
+        """
         if not shutil.which("codex"):
             logger.error("Codex CLI not found on PATH!")
             logger.error("Install with: npm install -g @openai/codex")
             raise RuntimeError("Codex CLI not found on PATH")
         self._write_config(logger)
         self._install_skills(logger)
+        load_codex_settings()
 
     def upgrade(self, logger: logging.Logger, timeout: int = 120) -> None:
         if not shutil.which("codex"):
@@ -124,20 +128,11 @@ trust_level = "trusted"
                 "LITELLM_API_KEY": auth_token,
             }
 
-            argv = [
-                "codex",
-                "exec",
-                "--skip-git-repo-check",
-                "--cd",
-                str(spec.cwd or REPO_ROOT),
-            ]
-            if spec.system_prompt_enabled and spec.system_prompt_path:
-                logger.info("System prompt path: %s", spec.system_prompt_path)
-                argv += [
-                    "-c",
-                    f'model_instructions_file="{spec.system_prompt_path}"',
-                ]
-            argv.append("-")
+            codex_settings = load_codex_settings()
+            session_id = codex_settings.get("session_id", {}).get(spec.session_name)
+            logger.info(f"Using session_id for {spec.session_name}: {session_id}")
+            argv = self.get_argv(spec, session_id)
+
             with open(prompt_file, encoding="utf-8") as stdin_f:
                 r = subprocess.run(
                     argv,
@@ -149,6 +144,22 @@ trust_level = "trusted"
                     env=env,
                 )
 
+            # Set session id for each service if not already
+            # The reason it uses the latest trace/log session to set the session id is based on the assumption that
+            # the latest session is the one that is currently running.
+            # This assumption fails in the case where orcherstrator runs longer than monitor
+            if not session_id:
+                session_id = get_latest_traces_session_id()
+                if session_id:
+                    logger.info(
+                        f"Latest trace session id for {spec.session_name}: {session_id}"
+                    )
+                    if (
+                        codex_settings.get("session_id", {}).get(spec.session_name)
+                        == None
+                    ):
+                        save_codex_settings(spec.session_name, session_id)
+
             res = AgentRunResult(r.stdout, r.stderr, r.returncode)
         except subprocess.TimeoutExpired:
             logger.warning(
@@ -157,9 +168,25 @@ trust_level = "trusted"
             )
             res = AgentRunResult(timed_out=True, exit_code=124)
         except OSError as exc:
-            logger.error(f"⚠️ OS error running Codex: {exc}")
+            logger.error(f"OS error running Codex: {exc}")
             res = AgentRunResult(stderr=str(exc), exit_code=1)
         finally:
             os.unlink(prompt_file)
 
         return res
+
+    def get_argv(self, spec: AgentRunConfig, session_id: str | None) -> list[str]:
+        """Return the argv for a Codex run"""
+        argv = ["codex", "exec"]
+        if session_id:
+            argv += ["resume", session_id]
+        argv.append("--skip-git-repo-check")
+        if not session_id:
+            argv += ["--cd", str(spec.cwd or REPO_ROOT)]
+        if spec.system_prompt_enabled and spec.system_prompt_path:
+            argv += [
+                "-c",
+                f'model_instructions_file="{spec.system_prompt_path}"',
+            ]
+        argv.append("-")
+        return argv
