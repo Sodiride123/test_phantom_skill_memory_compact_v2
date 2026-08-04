@@ -9,16 +9,5 @@
     "run_count": 3,
     "schedule": "0 9 * * 1",
     "thread_ts": null
-  },
-  {
-    "created_at": 1785807821.5943656,
-    "enabled": true,
-    "id": "lunch-reminder-forrest",
-    "last_run_at": null,
-    "next_run_at": 1785808080.0,
-    "prompt": "One-time reminder: Forrest asked to be reminded to have lunch. Post a friendly lunch reminder in the thread (reply with -t 1785807745.582629), keep it short and fun, sign off with :ninja:. Afterwards, run: python tools/cron.py remove lunch-reminder-forrest",
-    "run_count": 0,
-    "schedule": "48 1 4 8 *",
-    "thread_ts": "1785807745.582629"
   }
 ]
