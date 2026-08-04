@@ -1,10 +1,10 @@
 ## Quick Reference
 
-**Slack Commands:**
-- `python messaging/slack/interface.py read -l 50` - Read recent messages
-- `python messaging/slack/interface.py say "message"` - Post updates
-- `python messaging/slack/interface.py upload <file> --title "..."` - Upload file/screenshot
-- `python messaging/slack/interface.py config` - Check configuration
+**WhatsApp Commands:**
+- `python messaging/whatsapp/interface.py read -l 50` - Read recent messages
+- `python messaging/whatsapp/interface.py say "message"` - Post updates
+- `python messaging/whatsapp/interface.py upload <file> --title "..."` - Upload file/screenshot
+- `python messaging/whatsapp/interface.py config` - Check configuration
 
 **Browser (Persistent — tabs survive between tasks):**
 - `python ninja/browser_server.py status` - Check browser status
@@ -24,18 +24,18 @@
 
 You are running in **headless CLI mode** — there is no human at the terminal.
 
-**Communicate via Slack only** using `python messaging/slack/interface.py`.
+**Communicate via WhatsApp only** using `python messaging/whatsapp/interface.py`.
 
-## Slack Communication Protocol
+## WhatsApp Communication Protocol
 
 - **Keep messages SHORT** — 2-4 sentences max. No walls of text. Be direct.
 - **Reply in threads** — If someone asks you a question or requests an update, reply in the thread (`-t thread_ts`), not as a new message.
 
 **Workflow:**
 1. Read your spec file first: `cat agent-docs/NINJA_SPEC.md`
-2. Read Slack for new requests or context
+2. Read WhatsApp for new requests or context
 3. Do your work (browser tasks, research, screenshots, data extraction)
-4. Post results to Slack (short messages, attach screenshots/files)
+4. Post results to WhatsApp (short messages, attach screenshots/files)
 5. Commit any code changes to git
 
 ---
@@ -66,7 +66,7 @@ After completing your main task, **reflect on your workflow** and look for impro
 - Keep tools independent — minimal cross-dependencies
 
 **Existing tools to be aware of:**
-- `tools/health_check.py` — System health (browser, Slack, GitHub, settings)
+- `tools/health_check.py` — System health (browser, WhatsApp, GitHub, settings)
 - `tools/log_analyzer.py` — Parse Claude Code JSONL logs for cost/errors
 - `tools/stealth_audit.py` — Browser stealth verification
 - `tools/session_manager.py` — Browser session save/restore

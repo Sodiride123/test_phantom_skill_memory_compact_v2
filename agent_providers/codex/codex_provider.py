@@ -7,7 +7,12 @@ from pathlib import Path
 from ninja.agent_providers.base import AgentProvider, AgentRunConfig, AgentRunResult
 from ninja.agent_providers.codex.codex_utils import get_latest_traces_session_id
 from ninja.clients.litellm_client import get_config
-from ninja.constants import AGENTS_MD_CODEX_PATH
+from ninja.constants import (
+    AGENTS_MD_CODEX_PATH,
+    HEADER_NINJA_CONVERSATION_ID,
+    HEADER_NINJA_FEATURE,
+    HEADER_NINJA_TASK_ID,
+)
 from ninja.core.config import load_codex_settings, save_codex_settings
 from ninja.core.metadata import get_selected_model
 
@@ -45,6 +50,7 @@ class CodexProvider(AgentProvider):
         except (OSError, subprocess.SubprocessError):
             logger.warning("codex upgrade skipped", exc_info=True)
 
+    # TODO: move inline config to a config template
     def _write_config(self, logger: logging.Logger) -> None:
         """Codex uses TOML. Point it at LiteLLM via an OpenAI-compatible
         provider so it reuses the same gateway/token Claude uses."""
@@ -63,6 +69,7 @@ name = "litellm"
 base_url = "{base_url}"
 env_key = "LITELLM_API_KEY"
 wire_api = "responses"
+env_http_headers = {{ "{HEADER_NINJA_TASK_ID}" = "TASK_ID", "{HEADER_NINJA_FEATURE}" = "FEATURE", "{HEADER_NINJA_CONVERSATION_ID}" = "CONVERSATION_ID" }}
 
 [projects."/workspace/ninja"]
 trust_level = "trusted"

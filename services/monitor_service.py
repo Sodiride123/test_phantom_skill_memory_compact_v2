@@ -43,6 +43,7 @@ from messaging.message_utils import FORCE_THREAD_ENV, forced_thread_for_batch
 from utils.agent_files_logs import if_session_exists_by_name
 from utils.cost import (
     build_custom_headers,
+    build_feature,
     generate_task_title,
     record_task_cost,
 )
@@ -360,6 +361,10 @@ def run_batched_response(
     try:
         model = get_selected_model()
         if codex_harness_enabled:
+            # These env vars are used by the Codex harness to set the headers for the request
+            subprocess_env["NINJA_TASK_ID"] = task_id
+            subprocess_env["NINJA_FEATURE"] = build_feature(title)
+            subprocess_env["NINJA_CONVERSATION_ID"] = conversation_id
             logger.info(
                 f"Selected model {model} is a Codex harness model, using Codex for batch response"
             )

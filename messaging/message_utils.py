@@ -1,9 +1,12 @@
 """Shared message processing utilities across all messaging adapters."""
 
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
+
+from core.metadata import load_sandbox_metadata
 
 # Set by the monitor when the pending batch has exactly one message, so the
 # say/upload CLI can enforce its thread when the model drops the -t flag.
@@ -85,6 +88,67 @@ def forced_thread_for_batch(pending_messages: list) -> Optional[str]:
         return None
     thread_ts = pending_messages[0].get("thread_ts")
     return str(thread_ts) if thread_ts else None
+
+
+# Sandbox URL conversion. Converts 0.0.0.0:<port> references in messages to
+# public sandbox URLs. Every adapter must run this before rendering: a bare
+# 0.0.0.0:<port> is not a URL, so Markdown renderers leave it as inert text.
+# Reads sandbox_id and stage from /dev/shm/sandbox_metadata.json via core.metadata.
+#
+# Pattern: 0.0.0.0:<port> → <port>-<sandbox_id>.app.super.<stage>myninja.ai
+# Example: 0.0.0.0:8080 → 8080-134212d3-8907-4593-8090-b21ec7365c33.app.super.betamyninja.ai
+
+# Regex to match 0.0.0.0:<port> (port = 1-5 digit number)
+_PORT_URL_PATTERN = re.compile(r"0\.0\.0\.0:(\d{1,5})")
+
+
+def convert_sandbox_urls(text: str) -> str:
+    """
+    Convert 0.0.0.0:<port> patterns in text to public sandbox URLs.
+
+    In a cloud sandbox (LOCAL_DEVELOPMENT_MODE not set):
+        0.0.0.0:<port> → https://<port>-<sandbox_id>.app.super.<stage>myninja.ai
+
+    When LOCAL_DEVELOPMENT_MODE=True (local docker-compose):
+        0.0.0.0:<port> → http://localhost:<port>
+
+
+    Args:
+        text: Message text that may contain 0.0.0.0:<port> references
+
+    Returns:
+        Text with all 0.0.0.0:<port> replaced with public or local URLs.
+    """
+    local_mode = os.environ.get("LOCAL_DEVELOPMENT_MODE", "").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+
+    if local_mode:
+        # Local / docker-compose — use localhost
+        def _replace_port(match):
+            port = match.group(1)
+            return f"http://localhost:{port}"
+
+        return _PORT_URL_PATTERN.sub(_replace_port, text)
+
+    # Cloud sandbox — build the full public URL from sandbox metadata
+    metadata = load_sandbox_metadata()
+    if not metadata:
+        return text
+
+    sandbox_id = metadata.get("thread_id", "")
+    stage = metadata.get("environment", "")
+    if not sandbox_id:
+        return text
+    prefix = f"{stage}" if stage and stage != "prod" else ""
+
+    def _replace_port(match):
+        port = match.group(1)
+        return f"https://{port}-{sandbox_id}.app.super.{prefix}myninja.ai"
+
+    return _PORT_URL_PATTERN.sub(_replace_port, text)
 
 
 def _first_present(message: Dict[str, Any], *keys: str, default: Any = None) -> Any:

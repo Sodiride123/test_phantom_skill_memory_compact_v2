@@ -48,6 +48,7 @@ from services.orchestrator_service import run_codex_agent
 from utils.agent_files_logs import if_session_exists_by_name
 from utils.cost import (
     build_custom_headers,
+    build_feature,
     generate_task_title,
     record_task_cost,
 )
@@ -928,6 +929,9 @@ def run_agent(
         logger.info(f"Selected model is a codex harness model, using Codex agent.")
         started_at = datetime.now(timezone.utc).timestamp()
         subprocess_env = {**os.environ}
+        subprocess_env["NINJA_TASK_ID"] = task_id
+        subprocess_env["NINJA_FEATURE"] = build_feature(title)
+        subprocess_env["NINJA_CONVERSATION_ID"] = conversation_id
         try:
             result, duration_seconds = run_codex_agent(
                 prompt, system_prompt_enabled, subprocess_env, logger

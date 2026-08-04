@@ -105,7 +105,7 @@ Post it to the user:
 pdx connect-link
 # → {"ok": true, "link": "https://..."}
 
-python messaging/slack/interface.py say "Connect your apps here (expires in 30 min): <link>"
+python messaging/whatsapp/interface.py say "Connect your apps here (expires in 30 min): <link>"
 ```
 
 ---
