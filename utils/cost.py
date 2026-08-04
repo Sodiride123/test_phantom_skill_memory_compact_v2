@@ -305,15 +305,20 @@ def record_task_cost(
         print(f"⚠️ Could not compute cost: {e}", file=sys.stderr)
 
 
+def build_feature(title: str):
+    channel = load_agent_config().get("default_channel", "")
+    feature = f"{channel} - {title}" if channel else title
+    feature = feature.encode("ascii", errors="ignore").decode("ascii")
+    return feature
+
+
 def build_custom_headers(
     task_id: str, title: str, conversation_id: str | None = None
 ) -> str:
     """
     Build custom headers to track costs by thread_id and task_id
     """
-    channel = load_agent_config().get("default_channel", "")
-    feature = f"{channel} - {title}" if channel else title
-    feature = feature.encode("ascii", errors="ignore").decode("ascii")
+    feature = build_feature(title)
     headers = f"{HEADER_NINJA_TASK_ID}: {task_id}\n{HEADER_NINJA_FEATURE}: {feature}"
     if conversation_id:
         headers += f"\n{HEADER_NINJA_CONVERSATION_ID}: {conversation_id}"
