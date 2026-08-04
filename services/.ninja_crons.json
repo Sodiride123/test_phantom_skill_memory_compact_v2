@@ -9,5 +9,16 @@
     "run_count": 3,
     "schedule": "0 9 * * 1",
     "thread_ts": null
+  },
+  {
+    "created_at": 1785822116.7122777,
+    "enabled": true,
+    "id": "meeting-reminder-yan",
+    "last_run_at": null,
+    "next_run_at": 1785822360.0,
+    "prompt": "Remind Yan on WhatsApp: it's time for your meeting now! Then remove the cron job meeting-reminder-yan.",
+    "run_count": 0,
+    "schedule": "46 5 4 8 *",
+    "thread_ts": null
   }
 ]
