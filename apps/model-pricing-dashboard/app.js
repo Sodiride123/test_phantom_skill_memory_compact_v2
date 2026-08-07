@@ -27,10 +27,16 @@ let chart = null;
 // -------------------------------------------------------------------------
 init();
 
+// Per-model price changes vs the previous snapshot, keyed by "Provider/Name"
+// -> {field: {from, to, dir}}. Built from data/price_history.json (the two most
+// recent runs); empty object when there's no history or nothing changed.
+let CHANGES = {};
+
 async function init() {
   const res = await fetch("data/models.json");
   DATA = await res.json();
   MODELS = DATA.models;
+  CHANGES = await loadChanges();
 
   renderMeta();
   renderDataHealth();
