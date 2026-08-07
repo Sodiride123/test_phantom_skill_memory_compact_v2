@@ -1,6 +1,6 @@
 {
-  "last_collected": "2026-08-03T09:02:53Z",
-  "generated_at": "2026-08-03T09:02:53.935020+00:00",
+  "last_collected": "2026-08-07T05:50:18Z",
+  "generated_at": "2026-08-07T05:50:18.725209+00:00",
   "currency": "USD",
   "price_unit": "per 1,000,000 tokens",
   "provider_count": 6,
@@ -1300,75 +1300,11 @@
       "DeepSeek/DeepSeek V4 Flash",
       "DeepSeek/DeepSeek V4 Pro"
     ],
-    "context_upgrades": [
-      {
-        "model": "OpenAI/GPT-5.6 Luna",
-        "from": 400000,
-        "to": 1050000
-      },
-      {
-        "model": "OpenAI/GPT-5.6 Terra",
-        "from": 400000,
-        "to": 1050000
-      },
-      {
-        "model": "OpenAI/GPT-5.6 Sol",
-        "from": 400000,
-        "to": 1050000
-      },
-      {
-        "model": "Google/Gemini 3.5 Flash",
-        "from": 1000000,
-        "to": 1048576
-      },
-      {
-        "model": "Google/Gemini 3 Pro",
-        "from": 1000000,
-        "to": 1048576
-      },
-      {
-        "model": "DeepSeek/DeepSeek V4 Flash",
-        "from": 128000,
-        "to": 1000000
-      },
-      {
-        "model": "DeepSeek/DeepSeek V4 Pro",
-        "from": 128000,
-        "to": 1000000
-      }
-    ],
+    "context_upgrades": [],
     "drift_threshold_pct": 25.0,
     "drift": [],
-    "drift_vs_previous_run": [
-      {
-        "model": "OpenAI/GPT-5.6 Luna",
-        "field": "input_price",
-        "from": 1.0,
-        "to": 0.2,
-        "pct": 80.0,
-        "tier": "official",
-        "vs": "2026-07-27T09:02:02Z"
-      },
-      {
-        "model": "OpenAI/GPT-5.6 Luna",
-        "field": "cached_price",
-        "from": 0.1,
-        "to": 0.02,
-        "pct": 80.0,
-        "tier": "official",
-        "vs": "2026-07-27T09:02:02Z"
-      },
-      {
-        "model": "OpenAI/GPT-5.6 Luna",
-        "field": "output_price",
-        "from": 6.0,
-        "to": 1.2,
-        "pct": 80.0,
-        "tier": "official",
-        "vs": "2026-07-27T09:02:02Z"
-      }
-    ],
-    "history_compared_to": "2026-07-27T09:02:02Z",
+    "drift_vs_previous_run": [],
+    "history_compared_to": "2026-08-03T09:02:53Z",
     "not_scraped": {
       "Mistral": "mistral.ai/pricing lists subscription plans only, not API token prices \u2014 kept on aggregator/fallback"
     }
