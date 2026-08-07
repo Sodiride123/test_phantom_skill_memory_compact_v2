@@ -49,6 +49,7 @@ async function init() {
   CHANGES = deriveChanges(HISTORY);
 
   renderMeta();
+  initTheme();
   renderDataHealth();
   populateFilters();
   renderBestValue();
@@ -111,7 +112,7 @@ function deriveChanges(history) {
 // Exported for the no-DOM regression test (test_changes.js imports via a
 // CommonJS shim); harmless in the browser.
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { deriveChanges, buildTrend, trendMetric };
+  module.exports = { deriveChanges, buildTrend, trendMetric, themeChartColors };
 }
 
 // Read-only data-health summary: provenance mix + freshness + drift, all
@@ -384,6 +385,55 @@ function renderBestValue() {
   });
 }
 
+// ---------------- Theme toggle (issue #131) ----------------
+// Dark is the default (:root vars in styles.css); light is applied via
+// <html data-theme="light">. Preference persists in localStorage. Canvas
+// charts can't be restyled by CSS, so this palette mirrors the CSS vars and
+// the charts are redrawn on toggle.
+const THEME_KEY = "mpd-theme";
+const THEME_CHART_COLORS = {
+  dark: { text: "#e6ebf5", muted: "#94a2bd", grid: "#2a3550" },
+  light: { text: "#1a2233", muted: "#5b6b85", grid: "#d5dce8" },
+};
+// Pure — unknown theme names fall back to dark. Exported for Node tests.
+function themeChartColors(theme) {
+  return THEME_CHART_COLORS[theme] || THEME_CHART_COLORS.dark;
+}
+function currentTheme() {
+  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+}
+function applyTheme(theme) {
+  const t = theme === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = t;
+  const btn = document.getElementById("theme-toggle");
+  if (btn) {
+    btn.textContent = t === "light" ? "🌙 Dark" : "☀️ Light";
+    btn.setAttribute("aria-pressed", String(t === "light"));
+    btn.title = "Switch to " + (t === "light" ? "dark" : "light") + " theme";
+  }
+}
+function initTheme() {
+  // data-theme is normally set pre-paint by the inline script in index.html;
+  // this just syncs the button label. If the attribute is absent (e.g. the
+  // inline script was stripped), resolve the same way: saved > OS > dark.
+  let t = document.documentElement.dataset.theme;
+  if (t !== "light" && t !== "dark") {
+    try { t = localStorage.getItem(THEME_KEY); } catch (e) { t = null; }
+    if (t !== "light" && t !== "dark") {
+      t = typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: light)").matches
+        ? "light" : "dark";
+    }
+  }
+  applyTheme(t);
+}
+function toggleTheme() {
+  const next = currentTheme() === "light" ? "dark" : "light";
+  try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* storage blocked */ }
+  applyTheme(next);
+  renderChart(); // canvas colors don't restyle via CSS — redraw both charts
+  renderTrend();
+}
+
 // ---------------- Chart ----------------
 function renderChart() {
   const metric = val("chart-metric");
@@ -415,6 +465,7 @@ function renderChart() {
   }
 
   if (chart) chart.destroy();
+  const tc = themeChartColors(currentTheme());
   chart = new Chart(ctx, {
     type: "bar",
     data: {
@@ -427,11 +478,11 @@ function renderChart() {
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        title: { display: true, text: title, color: "#e6ebf5", font: { size: 15 } },
+        title: { display: true, text: title, color: tc.text, font: { size: 15 } },
       },
       scales: {
-        x: { ticks: { color: "#94a2bd" }, grid: { color: "#2a3550" } },
-        y: { ticks: { color: "#e6ebf5" }, grid: { color: "#2a3550" } },
+        x: { ticks: { color: tc.muted }, grid: { color: tc.grid } },
+        y: { ticks: { color: tc.text }, grid: { color: tc.grid } },
       },
     },
   });
@@ -515,6 +566,7 @@ function renderTrend() {
   }));
 
   if (trendChart) trendChart.destroy();
+  const tc = themeChartColors(currentTheme());
   trendChart = new Chart(canvas.getContext("2d"), {
     type: "line",
     data: { labels, datasets },
@@ -523,15 +575,15 @@ function renderTrend() {
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       plugins: {
-        legend: { display: true, labels: { color: "#e6ebf5", boxWidth: 14 } },
-        title: { display: true, text: "Average " + metricLabel(metric) + " by provider over time ($/1M)", color: "#e6ebf5", font: { size: 15 } },
+        legend: { display: true, labels: { color: tc.text, boxWidth: 14 } },
+        title: { display: true, text: "Average " + metricLabel(metric) + " by provider over time ($/1M)", color: tc.text, font: { size: 15 } },
         tooltip: {
           callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y === null ? "—" : "$" + c.parsed.y.toFixed(2)}` },
         },
       },
       scales: {
-        x: { ticks: { color: "#94a2bd" }, grid: { color: "#2a3550" } },
-        y: { ticks: { color: "#e6ebf5", callback: (v) => "$" + v }, grid: { color: "#2a3550" } },
+        x: { ticks: { color: tc.muted }, grid: { color: tc.grid } },
+        y: { ticks: { color: tc.text, callback: (v) => "$" + v }, grid: { color: tc.grid } },
       },
     },
   });
@@ -642,6 +694,8 @@ function attachEvents() {
   document.getElementById("hl-fallback").addEventListener("change", (e) => {
     document.body.classList.toggle("hl-fallback", e.target.checked);
   });
+
+  document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 
   document.getElementById("export-csv").addEventListener("click", exportCSV);
   document.getElementById("export-json").addEventListener("click", exportJSON);

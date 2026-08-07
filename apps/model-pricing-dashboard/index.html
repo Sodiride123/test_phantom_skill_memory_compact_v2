@@ -6,9 +6,23 @@
   <title>AI Model Pricing &amp; Capabilities Dashboard</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    // Apply the saved theme before first paint so there is no flash of the
+    // wrong theme. Must stay in sync with THEME_KEY/initTheme() in app.js.
+    (function () {
+      try {
+        var t = localStorage.getItem("mpd-theme");
+        if (t !== "light" && t !== "dark") {
+          t = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        }
+        document.documentElement.dataset.theme = t;
+      } catch (e) { /* storage blocked -> default dark */ }
+    })();
+  </script>
 </head>
 <body>
   <header>
+    <button id="theme-toggle" type="button" aria-pressed="false" title="Switch theme">☀️ Light</button>
     <h1>AI Model Pricing &amp; Capabilities</h1>
     <p class="sub">
       Compare pricing, context windows &amp; capabilities across OpenAI, Anthropic,

@@ -15,6 +15,26 @@
   --xai: #b06cf0;
   --mistral: #ff7000;
   --deepseek: #4d6bfe;
+  --header-top: #131a2a;
+  color-scheme: dark;
+}
+
+/* Light theme (issue #131). Applied via <html data-theme="light">; the same
+   palette must be mirrored in themeChartColors() in app.js for the canvas
+   charts, which cannot be restyled via CSS. */
+html[data-theme="light"] {
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --panel-2: #eef1f7;
+  --border: #d5dce8;
+  --text: #1a2233;
+  --muted: #5b6b85;
+  --accent: #2f6bed;
+  --official: #0a84ff;
+  --agg: #1e9e4a;
+  --fb: #b97a0a;
+  --header-top: #ffffff;
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -29,10 +49,25 @@ body {
 }
 
 header {
+  position: relative;
   padding: 28px 32px 18px;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, #131a2a, var(--bg));
+  background: linear-gradient(180deg, var(--header-top), var(--bg));
 }
+#theme-toggle {
+  position: absolute;
+  top: 24px;
+  right: 32px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+#theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
 header h1 { margin: 0 0 4px; font-size: 26px; }
 .sub { margin: 0 0 10px; color: var(--muted); }
 .meta { margin: 0; font-size: 13px; color: var(--muted); }
@@ -108,7 +143,7 @@ h2 { margin: 0 0 14px; font-size: 18px; }
 /* ---------- Charts ---------- */
 .chart-controls { display: flex; gap: 18px; margin-bottom: 14px; flex-wrap: wrap; }
 .chart-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; height: 420px; }
-.trend-note { color: #94a2bd; font-size: 13px; margin: 0 0 10px; }
+.trend-note { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
 
 /* ---------- Filters ---------- */
 .filters {
