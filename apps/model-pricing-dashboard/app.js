@@ -25,7 +25,11 @@ let sortDir = "asc";
 let chart = null;
 
 // -------------------------------------------------------------------------
-init();
+// Browser bootstrap. Guarded so the module can be require()'d under Node for
+// the no-DOM regression tests (test_changes.js) without auto-running init().
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+  init();
+}
 
 // Per-model price changes vs the previous snapshot, keyed by "Provider/Name"
 // -> {field: {from, to, dir}}. Built from data/price_history.json (the two most
@@ -53,6 +57,54 @@ function renderMeta() {
     "Last collected: " + d.toISOString().slice(0, 10);
   document.getElementById("counts").textContent =
     `${DATA.model_count} models · ${DATA.provider_count} providers`;
+}
+
+// Fetch price_history.json and derive per-model price changes between the two
+// most recent snapshots. Pure derivation lives in deriveChanges() so it can be
+// regression-tested without a network/DOM.
+async function loadChanges() {
+  try {
+    const r = await fetch("data/price_history.json");
+    if (!r.ok) return {};
+    const hist = await r.json();
+    return deriveChanges(hist);
+  } catch (e) {
+    return {}; // no history / unparseable -> no badges, never break the table
+  }
+}
+
+// history: [{date, prices: {"Provider/Name": {input,cached,output,provenance}}}]
+// Returns {"Provider/Name": {field: {from,to,dir,date}}} for the latest vs the
+// previous snapshot. dir: "up" | "down" | "same". Only numeric, actually-changed
+// fields are included. Pure function — unit-tested (test_changes.js).
+function deriveChanges(history) {
+  const out = {};
+  if (!Array.isArray(history) || history.length < 2) return out;
+  const prev = history[history.length - 2];
+  const cur = history[history.length - 1];
+  if (!prev || !cur || !prev.prices || !cur.prices) return out;
+  const fields = { input: "input_price", cached: "cached_price", output: "output_price" };
+  for (const key of Object.keys(cur.prices)) {
+    const p = prev.prices[key];
+    if (!p) continue;
+    for (const [histField, modelField] of Object.entries(fields)) {
+      const from = p[histField];
+      const to = cur.prices[key][histField];
+      if (typeof from !== "number" || typeof to !== "number") continue;
+      if (!isFinite(from) || !isFinite(to)) continue;
+      if (from === to) continue;
+      (out[key] = out[key] || {})[modelField] = {
+        from, to, dir: to > from ? "up" : "down", date: cur.date || "",
+      };
+    }
+  }
+  return out;
+}
+
+// Exported for the no-DOM regression test (test_changes.js imports via a
+// CommonJS shim); harmless in the browser.
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { deriveChanges };
 }
 
 // Read-only data-health summary: provenance mix + freshness + drift, all
@@ -229,18 +281,33 @@ function rowEl(m) {
   const cls = PROVIDER_CLASS[m.provider] || "";
   if (m.price_stale) tr.classList.add("row-stale");
 
+  // Price-change badge: ▲/▼ next to the value when this model's price moved vs
+  // the previous snapshot (from data/price_history.json). Tooltip shows old -> new.
+  const chg = CHANGES[`${m.provider}/${m.name}`] || {};
+  const changeBadge = (field) => {
+    const c = chg[field];
+    if (!c) return "";
+    const arrow = c.dir === "up" ? "▲" : "▼";
+    const title =
+      `${arrow} ${field.replace("_", " ")}: ${price(c.from)} -> ${price(c.to)}` +
+      (c.date ? ` (${c.date.slice(0, 10)})` : "");
+    return `<span class="chg chg-${c.dir}" title="${title}">${arrow}</span>`;
+  };
+
   // Provenance-bearing cell: adds a coloured dot + tooltip + cell-<kind> class.
   const cell = (field, inner, extra = "") => {
     const mk = provMark(field, m);
     return `<td class="cell-${mk.kind}${extra ? " " + extra : ""}" title="${mk.title}">${inner}<span class="pdot pdot-${mk.kind}"></span></td>`;
   };
+  // Price cells carry the provenance dot AND the change badge.
+  const priceCell = (field) => cell(field, price(m[field]) + changeBadge(field), "num");
 
   tr.innerHTML = `
     <td><span class="prov-badge ${cls}">${m.provider}</span></td>
     <td><b>${m.name}</b><br /><span class="prov-dot">${m.family}</span></td>
-    ${cell("input_price", price(m.input_price), "num")}
-    ${cell("cached_price", price(m.cached_price), "num")}
-    ${cell("output_price", price(m.output_price), "num")}
+    ${priceCell("input_price")}
+    ${priceCell("cached_price")}
+    ${priceCell("output_price")}
     ${cell("context_window", ctx, "num")}
     ${cell("modalities", m.modalities.map((x) => `<span class="pill">${x}</span>`).join(""))}
     ${cell("release_date", m.release_date)}

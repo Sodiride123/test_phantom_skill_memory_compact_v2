@@ -201,6 +201,17 @@ tbody tr:hover { background: var(--panel); }
   border-bottom: 7px solid var(--fb);
 }
 tbody tr.row-stale td.cell-stale { color: var(--fb); }
+/* price-change badge: ▲ up (price rose, red) / ▼ down (price fell, green) */
+.chg {
+  display: inline-block;
+  margin-left: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: middle;
+  cursor: help;
+}
+.chg-up { color: #ff453a; }
+.chg-down { color: var(--agg); }
 body.hl-fallback td.cell-fb { background: rgba(255, 176, 32, 0.1); }
 body.hl-fallback td.cell-stale { background: rgba(255, 176, 32, 0.22); }
 
