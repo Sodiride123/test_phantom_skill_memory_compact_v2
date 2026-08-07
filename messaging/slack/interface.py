@@ -80,6 +80,21 @@ Examples:
     python slack_interface.py read -l 20
 """
 
+# When this file is executed by path, Python puts ``messaging/slack`` first on
+# sys.path.  That makes our local token.py shadow the standard-library token
+# module while logging -> traceback -> tokenize is importing, producing a
+# circular-import failure before the CLI can start.  Remove the script
+# directory and add the repository root before importing the standard library.
+if __name__ == "__main__" and (__package__ is None or __package__ == ""):
+    import os as _os
+    import sys as _sys
+
+    _script_dir = _os.path.dirname(_os.path.abspath(__file__))
+    _repo_root = _os.path.dirname(_os.path.dirname(_script_dir))
+    _sys.path[:] = [p for p in _sys.path if _os.path.abspath(p) != _script_dir]
+    if _repo_root not in _sys.path:
+        _sys.path.insert(0, _repo_root)
+
 import argparse
 import json
 import logging
