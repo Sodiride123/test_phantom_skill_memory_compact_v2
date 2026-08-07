@@ -165,6 +165,19 @@ collision-smell warnings even when it does. So the snapshot stays current, and a
 malformed refresh is surfaced rather than silently shipped. Manage it with
 `python tools/cron.py list|show|update|disable weekly-pricing-refresh`.
 
+The same cron then runs `price_digest.py --post`, which diffs the two most
+recent `price_history.json` snapshots and posts a **weekly price-change digest**
+to Slack: top price movers (up/down, biggest % move first), new/removed models,
+and the fallback-share change (how the non-`official` share moved). It is a
+**silent no-op** when nothing changed since the last run — no movers, no
+new/removed models, flat fallback share — so quiet weeks don't spam the channel.
+Run it standalone any time:
+
+```bash
+python price_digest.py            # print the digest (or nothing if no changes)
+python price_digest.py --post     # post it to Slack
+```
+
 ## Data sources & provenance
 
 Every model row carries a `provenance` map so you can see which fields are fresh
