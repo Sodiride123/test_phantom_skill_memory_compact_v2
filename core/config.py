@@ -327,8 +327,20 @@ def load_codex_settings() -> dict:
 
 
 def save_codex_settings(service_name, session_id) -> dict:
-    """Persist Codex settings to disk with timestamp. Returns the written config."""
+    """Persist Codex settings to disk. Returns the written config.
+
+    Backs up the previous file with a timestamp only when the value changes.
+    """
     config = load_codex_settings()
+    if config.get("session_id", {}).get(service_name) == session_id:
+        return config
+    if CODEX_SETTINGS_FILE.is_file():
+        ts = datetime.now().strftime("%Y%m%d%H%M%S")
+        bak = CODEX_SETTINGS_FILE.with_suffix(f".{ts}.bak")
+        try:
+            CODEX_SETTINGS_FILE.rename(bak)
+        except OSError:
+            pass
     if "session_id" not in config:
         config["session_id"] = {}
     config["session_id"][service_name] = session_id

@@ -184,6 +184,23 @@ class MessagingInterface(ABC):
         """
         return
 
+    def batch_already_answered(self, pending_messages: list) -> bool:
+        """True if a reply from this agent already exists for the batch.
+
+        The retry loop (processes/common.py) treats a run as answered only when
+        the sent-store grows *during that poll cycle*. That misses a legitimate
+        case: a prior cycle already posted the reply, and the current run
+        correctly declined to post a duplicate. Without a cross-cycle check the
+        monitor keeps counting that as a failure and eventually fires a false
+        "couldn't finish it, please resend" notice for a message it did answer.
+
+        Adapters that can cheaply inspect a thread for one of their own replies
+        override this so the monitor can recognize an already-answered batch and
+        stop retrying it. Default is a conservative no-op (False), preserving the
+        existing same-cycle behavior for channels that don't implement it.
+        """
+        return False
+
     # ------------------------------------------------------------------
     # Health service integration
     # ------------------------------------------------------------------

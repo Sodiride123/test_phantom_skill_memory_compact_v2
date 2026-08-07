@@ -17,6 +17,8 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
+from core.config import load_agent_config
+
 if TYPE_CHECKING:
     from messaging.base import MessagingInterface
 
@@ -27,18 +29,36 @@ _SUPPORTED_CHANNELS = ("slack", "whatsapp", "teams", "local")
 
 
 def resolve_messaging_channel() -> str:
-    """Resolve active channel from the MESSAGING_CHANNEL env var; default 'slack'."""
-    explicit = os.environ.get(_CHANNEL_ENV)
-    if explicit is None or not explicit.strip():
-        return _DEFAULT_CHANNEL
+    """Resolve active channel from env var or ``~/.agent_settings.json``.
 
-    resolved = explicit.strip().lower()
-    if resolved not in _SUPPORTED_CHANNELS:
-        raise ValueError(
-            f"Unsupported messaging channel: {resolved!r}. "
-            f"Choose from: {', '.join(_SUPPORTED_CHANNELS)}"
-        )
-    return resolved
+    Resolution order:
+      1. ``MESSAGING_CHANNEL`` environment variable (set by systemd drop-ins
+         for most services).
+      2. ``default_channel`` in ``~/.agent_settings.json`` (always available,
+         including for ``ninja.service`` which has no systemd drop-in).
+      3. Falls back to ``"slack"`` if neither is set.
+    """
+    explicit = os.environ.get(_CHANNEL_ENV)
+    if explicit and explicit.strip():
+        resolved = explicit.strip().lower()
+        if resolved not in _SUPPORTED_CHANNELS:
+            raise ValueError(
+                f"Unsupported messaging channel: {resolved!r}. "
+                f"Choose from: {', '.join(_SUPPORTED_CHANNELS)}"
+            )
+        return resolved
+
+    # Env var not set — fall back to agent_settings.json
+    try:
+        channel = load_agent_config().get("default_channel", "")
+        if channel and channel.strip():
+            resolved = channel.strip().lower()
+            if resolved in _SUPPORTED_CHANNELS:
+                return resolved
+    except Exception:
+        pass
+
+    return _DEFAULT_CHANNEL
 
 
 def get_messaging_interface(channel: str | None = None) -> "MessagingInterface":

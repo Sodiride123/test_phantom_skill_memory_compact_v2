@@ -16,7 +16,7 @@ logger = get_logger(ORCHESTRATOR_SERVICE_NAME)
 
 
 def run_codex_agent(
-    prompt: str, system_prompt_enabled: bool, env: dict, logger
+    prompt: str, title: str, system_prompt_enabled: bool, env: dict, logger
 ) -> tuple[AgentRunResult, float]:
     logger.info(f"Running orchestrator using Codex agent with prompt: {prompt}")
 
@@ -30,6 +30,7 @@ def run_codex_agent(
         cwd=REPO_ROOT,
         env=env,
         process_label="orchestrator",
+        title=title,
     )
 
     provider = CodexProvider()

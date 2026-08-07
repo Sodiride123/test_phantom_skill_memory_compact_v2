@@ -16,6 +16,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agents_config import AGENTS
+from messaging.factory import resolve_messaging_channel
 from processes.orchestrator import (
     ensure_settings_file,
     login_github_cli,
@@ -32,7 +33,9 @@ def main():
         logger.error("❌ Cannot start without settings.json. Exiting.")
         sys.exit(1)
 
-    login_github_cli(logger)
+    # Skip GitHub CLI login for local channel — no git repo / mcp-token
+    if resolve_messaging_channel() != "local":
+        login_github_cli(logger)
 
     # Ensure persistent browser is running before starting the agent
     from browser.browser_server import ensure_running

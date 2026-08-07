@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document defines the communication standards and protocols for agent interaction within the team WhatsApp channel using the `messaging/whatsapp/interface.py` CLI tool.
+This document defines the communication standards and protocols for agent interaction within the team Slack channel using the `messaging/slack/interface.py` CLI tool.
 
 ## 🚨 CRITICAL: Workflow
 
@@ -11,10 +11,10 @@ This document defines the communication standards and protocols for agent intera
 │                     TASK EXECUTION PROTOCOL                              │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│   1. Agent receives task via WhatsApp or --task flag                        │
+│   1. Agent receives task via Slack or --task flag                        │
 │   2. Agent reads spec: cat agent-docs/NINJA_SPEC.md                   │
 │   3. Agent executes task using browser toolkit                           │
-│   4. Agent reports results back to WhatsApp                                 │
+│   4. Agent reports results back to Slack                                 │
 │                                                                          │
 │   WAKE UP INSTRUCTION                                                    │
 │   ═══════════════════                                                    │
@@ -23,26 +23,26 @@ This document defines the communication standards and protocols for agent intera
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-## WhatsApp Interface Tool
+## Slack Interface Tool
 
-All agents communicate via the `messaging/whatsapp/interface.py` CLI tool. See [WHATSAPP_INTERFACE.md](WHATSAPP_INTERFACE.md) for complete documentation.
+All agents communicate via the `messaging/slack/interface.py` CLI tool. See [SLACK_INTERFACE.md](SLACK_INTERFACE.md) for complete documentation.
 
 ### Quick Reference
 
 ```bash
 # Configure your agent identity (do this first!)
-python messaging/whatsapp/interface.py config --set-agent <your-agent-name>
-python messaging/whatsapp/interface.py config --set-channel "#your-channel"
+python messaging/slack/interface.py config --set-agent <your-agent-name>
+python messaging/slack/interface.py config --set-channel "#your-channel"
 
 # Read messages from the channel
-python messaging/whatsapp/interface.py read              # Last 50 messages
-python messaging/whatsapp/interface.py read -l 100       # Last 100 messages
+python messaging/slack/interface.py read              # Last 50 messages
+python messaging/slack/interface.py read -l 100       # Last 100 messages
 
 # Send messages as configured agent
-python messaging/whatsapp/interface.py say "Your message here"
+python messaging/slack/interface.py say "Your message here"
 
 # Upload files (uploads with agent impersonation)
-python messaging/whatsapp/interface.py upload design.png --title "Design Mockup"
+python messaging/slack/interface.py upload design.png --title "Design Mockup"
 ```
 
 ## Channel Structure
@@ -71,14 +71,14 @@ Session updates follow a **single-thread pattern**:
 
 ```bash
 # Post top-level session update message
-python messaging/whatsapp/interface.py say "Session 5 Update 🧵"
+python messaging/slack/interface.py say "Session 5 Update 🧵"
 ```
 
 **Step 2 — Same agent immediately replies in the thread with their update:**
 
 ```bash
 # Reply to the thread with your status (use the timestamp from step 1)
-python messaging/whatsapp/interface.py say "✅ Completed homepage mockup, pushed to designs/ folder
+python messaging/slack/interface.py say "✅ Completed homepage mockup, pushed to designs/ folder
 🔄 Starting mobile responsive variants
 🚧 No blockers" -t <thread_timestamp>
 ```
@@ -87,7 +87,7 @@ python messaging/whatsapp/interface.py say "✅ Completed homepage mockup, pushe
 
 ```bash
 # Other agents find the "Session N Update 🧵" thread and reply under it
-python messaging/whatsapp/interface.py say "✅ Implemented API endpoints for user auth
+python messaging/slack/interface.py say "✅ Implemented API endpoints for user auth
 🔄 Working on frontend integration
 🚧 Waiting on design specs for settings page" -t <thread_timestamp>
 ```
@@ -96,7 +96,7 @@ python messaging/whatsapp/interface.py say "✅ Implemented API endpoints for us
 
 ### Message Length
 
-- **Keep all WhatsApp messages SHORT** — 2-4 sentences max
+- **Keep all Slack messages SHORT** — 2-4 sentences max
 - No walls of text. Be direct and concise
 - If detail is needed, put it in a thread reply or link to a GitHub issue/PR
 
@@ -113,7 +113,7 @@ Stakeholders are human team members who provide direction, approve work, and can
 #### Task Acknowledgment
 
 ```bash
-python messaging/whatsapp/interface.py say "**Task Received**
+python messaging/slack/interface.py say "**Task Received**
 
 I've received the browser automation task. Here's my plan:
 
@@ -130,7 +130,7 @@ Starting now!"
 ```bash
 # Always share the VNC link so stakeholders can watch the browser live.
 # Use ninja/vnc.py to generate the auto-connect URL (no password needed).
-python messaging/whatsapp/interface.py say "**🖥️ Live Browser View**
+python messaging/slack/interface.py say "**🖥️ Live Browser View**
 
 Watch the browser automation in real-time:
 $(python -c 'from browser.vnc import get_vnc_url; print(get_vnc_url())')
@@ -146,7 +146,7 @@ Click the link above to view the browser session live — no install needed."
 #### Task Completion
 
 ```bash
-python messaging/whatsapp/interface.py say "**Task Complete**
+python messaging/slack/interface.py say "**Task Complete**
 
 Browser automation task finished. Results:
 - Screenshots attached
@@ -161,14 +161,14 @@ Let me know if you need anything else!"
 
 ```bash
 # The FIRST agent to update posts this as a top-level message
-python messaging/whatsapp/interface.py say "Session 3 Update 🧵"
+python messaging/slack/interface.py say "Session 3 Update 🧵"
 ```
 
 #### Session Update — Agent Reply (in thread)
 
 ```bash
 # ALL agents reply in the thread using -t <timestamp>
-python messaging/whatsapp/interface.py say "✅ Completed: [what you finished]
+python messaging/slack/interface.py say "✅ Completed: [what you finished]
 🔄 In Progress: [current work]
 🚧 Blockers: [any blockers, or None]" -t <session_thread_ts>
 ```
@@ -178,18 +178,18 @@ python messaging/whatsapp/interface.py say "✅ Completed: [what you finished]
 #### Asking for Help (reply in relevant thread)
 
 ```bash
-python messaging/whatsapp/interface.py say "Quick question about [topic]: [details]" -t <message_id>
+python messaging/slack/interface.py say "Quick question about [topic]: [details]" -t <thread_ts>
 ```
 
 #### Sharing Work
 
 ```bash
-python messaging/whatsapp/interface.py say "**[Work Type] Update**
+python messaging/slack/interface.py say "**[Work Type] Update**
 
 [Brief description]
 
 📎 GitHub: [link to PR/issue/commit]
-📎 WhatsApp: File uploaded in thread below
+📎 Slack: File uploaded in thread below
 
 @[relevant_agent] — ready for review"
 ```
@@ -197,7 +197,7 @@ python messaging/whatsapp/interface.py say "**[Work Type] Update**
 #### Reporting Blockers
 
 ```bash
-python messaging/whatsapp/interface.py say "🚨 **Blocker**
+python messaging/slack/interface.py say "🚨 **Blocker**
 
 Blocked on [task]:
 - **Issue**: [Description]
@@ -210,7 +210,7 @@ Blocked on [task]:
 #### Work Summary (reply in session thread)
 
 ```bash
-python messaging/whatsapp/interface.py say "📊 **Cycle Summary**
+python messaging/slack/interface.py say "📊 **Cycle Summary**
 
 - [Accomplishment 1]
 - [Accomplishment 2]
@@ -230,7 +230,7 @@ python messaging/whatsapp/interface.py say "📊 **Cycle Summary**
 ### 2. Mention Protocol
 
 - Mention relevant agents when their input is needed
-- Report escalations and blockers in WhatsApp
+- Report escalations and blockers in Slack
 - Use `@channel` sparingly (emergencies only)
 
 ### 3. Response Expectations
@@ -249,74 +249,44 @@ python messaging/whatsapp/interface.py say "📊 **Cycle Summary**
    - Documents → `docs/` or `agent-docs/` folder
    - Test Reports → `reports/` folder
 
-2. **Upload to WhatsApp** — so the team can view files immediately
+2. **Upload to Slack** — so the team can view files immediately
 
    ```bash
-   # Upload file to WhatsApp (uses agent impersonation)
-   python messaging/whatsapp/interface.py upload path/to/file.png --title "Design Mockup v2"
+   # Upload file to Slack (uses agent impersonation)
+   python messaging/slack/interface.py upload path/to/file.png --title "Design Mockup v2"
 
    # Upload to a specific thread
-   python messaging/whatsapp/interface.py upload report.pdf --title "Test Report" -t <message_id>
+   python messaging/slack/interface.py upload report.pdf --title "Test Report" -t <thread_ts>
    ```
 
 3. **Post the GitHub link** — reference where the file lives in the repo
    ```bash
-   python messaging/whatsapp/interface.py say "📎 Design mockup committed: [GitHub link]
+   python messaging/slack/interface.py say "📎 Design mockup committed: [GitHub link]
    File also uploaded in thread above for quick preview"
    ```
 
-> **Key rule:** Files should be accessible both in WhatsApp (for quick viewing) AND in the repo (for version control). Always do both.
+> **Key rule:** Files should be accessible both in Slack (for quick viewing) AND in the repo (for version control). Always do both.
 
 ### 5. Audio / Voice Message Protocol
 
-WhatsApp users (and other agents) may send **audio messages** or **voice clips** in channels and threads.
+Slack users (and other agents) may send **audio messages** or **voice clips** in channels and threads.
 
-**When you encounter an audio/voice message in WhatsApp:**
+**When you encounter an audio/voice message in Slack:**
 
 1. **Detect the audio attachment** — check the message for audio/voice file attachments
 2. **Transcribe using the channel-specific transcriber**:
 
    ```bash
-   python messaging/whatsapp/transcribe.py
+   python messaging/slack/transcribe.py
    ```
 
 3. **Process the transcript** — treat the transcribed text as if it were a regular text message and respond accordingly
 4. **Acknowledge the voice message** — when replying, mention that you received and transcribed the voice message:
    ```bash
-   python messaging/whatsapp/interface.py say "🎤 I listened to your voice message. Here's my response: ..." -t <message_id>
+   python messaging/slack/interface.py say "🎤 I listened to your voice message. Here's my response: ..." -t <thread_ts>
    ```
 
-> **Key rule:** Never ignore audio/voice messages. Always transcribe them using `python messaging/whatsapp/transcribe.py` and respond to their content just like any text message. If transcription fails, acknowledge the voice message and ask the sender to provide a text version.
-
-### 5a. WhatsApp Media (Ninja mode)
-
-When running under `MESSAGING_CHANNEL=whatsapp`, voice / image / pdf flow through
-the gateway instead of Slack — but the agent-side transcription / vision /
-document handling is identical to Slack:
-
-| Source | Inbox surface | Bytes endpoint | Send back |
-|--------|----------------|----------------|-----------|
-| Slack  | `files[].url_private_download` (bot token) | Slack file API | `slack_interface upload` |
-| WhatsApp | `media_kind` + `media_id` on the inbox record | `GET /media/:id` (gateway bearer token) | `python messaging/whatsapp/interface.py upload --kind …` |
-
-The WhatsApp monitor prompt includes a `fetch-media` command per inbound
-media message. The gateway URL and bearer token are resolved from
-`WHATSAPP_GATEWAY_URL` / `WHATSAPP_GATEWAY_TOKEN` (or the `whatsapp`
-sub-object in `~/.agent_settings.json`) — **never paste the token into the
-chat or the prompt body**.
-
-```bash
-# Voice: fetch and feed to LiteLLM Whisper (same model + endpoint as Slack).
-python messaging/whatsapp/interface.py fetch-media --media-id <id> --out /tmp/v.ogg
-# … POST /v1/audio/transcriptions, model=whisper-1, files={"file": …}
-
-# Image: fetch and send as input_image content block to a vision-capable Claude model.
-# PDF:   fetch and send as document content block to Claude.
-```
-
-To reply with media, use the `upload` verb with the same `--ninja-prefix`
-behaviour as `say` — when no caption is supplied it synthesizes
-`🥷 Ninja: shared a/an <kind>` so the human still sees a bot tag.
+> **Key rule:** Never ignore audio/voice messages. Always transcribe them using `python messaging/slack/transcribe.py` and respond to their content just like any text message. If transcription fails, acknowledge the voice message and ask the sender to provide a text version.
 
 ## Interaction Patterns
 
@@ -324,8 +294,8 @@ behaviour as `say` — when no caption is supplied it synthesizes
 
 ```
 Direction Flow:
-Stakeholder ──task──▶ Ninja (via WhatsApp or --task flag)
-Ninja ──results──▶ Stakeholder (via WhatsApp)
+Stakeholder ──task──▶ Ninja (via Slack or --task flag)
+Ninja ──results──▶ Stakeholder (via Slack)
 ```
 
 ### Stakeholders → Agents
@@ -344,21 +314,21 @@ Stakeholders can:
 ### Issue References
 
 ```
-When referencing GitHub issues in WhatsApp:
+When referencing GitHub issues in Slack:
 "Working on #42 - [Issue Title]"
 ```
 
 ### PR Notifications
 
 ```bash
-python messaging/whatsapp/interface.py say "🔀 PR Ready: [Title] - [GitHub Link]
+python messaging/slack/interface.py say "🔀 PR Ready: [Title] - [GitHub Link]
 Ready for review"
 ```
 
 ### Code Review Comments
 
 ```bash
-python messaging/whatsapp/interface.py say "📝 Review feedback on PR #[number]:
+python messaging/slack/interface.py say "📝 Review feedback on PR #[number]:
 - [Comment 1]
 - [Comment 2]
 Please address these"
@@ -372,13 +342,13 @@ Please address these"
 If an agent fails to respond during sync:
 1. Agent notes the absence
 2. Work continues with available agents
-3. Failed agent catches up next cycle via WhatsApp history and open issues
+3. Failed agent catches up next cycle via Slack history and open issues
 ```
 
 ### Integration Failure
 
 ```
-If WhatsApp is unavailable:
+If Slack is unavailable:
 1. Agent logs the failure
 2. Retries with exponential backoff
 3. Stores pending messages for later delivery
@@ -396,7 +366,7 @@ If WhatsApp is unavailable:
 ### Escalation Format
 
 ```bash
-python messaging/whatsapp/interface.py say "👤 **Stakeholder Input Needed**
+python messaging/slack/interface.py say "👤 **Stakeholder Input Needed**
 
 We need your input on:
 - **Topic**: [Description]
@@ -525,7 +495,7 @@ journalctl -u ninja.service -f    # follow logs
 This starts:
 
 - **Work process**: Executes the current task using browser toolkit
-- **Monitor process**: Watches for new WhatsApp mentions
+- **Monitor process**: Watches for new Slack mentions
 
 For one-off operator tasks from a terminal:
 

@@ -27,6 +27,11 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from agent_providers.base import AgentRunConfig
+from agent_providers.claude.claude_output import primary_model
+from agent_providers.claude.claude_provider import ClaudeProvider, detect_api_error
+from agent_providers.codex.codex_provider import parse_codex_output
+
 # Import centralized agent configuration
 from agents_config import AGENTS
 from clients.posthog_client import capture, is_feature_enabled
@@ -35,6 +40,7 @@ from constants import (
     AGENT_SETTINGS_PATH,
     CLAUDE_RUN_ORCHESTRATOR_TIMEOUT_SECONDS,
     CODEX_HARNESS_MODEL,
+    DEFAULT_MODEL,
     ORCHESTRATOR_SERVICE_NAME,
     SANDBOX_METADATA_PATH,
     STOP_HOOKS_FEATURE_FLAG,
@@ -44,11 +50,10 @@ from constants import (
 from core.config import is_orchestrator_enabled
 from core.logging import get_logger
 from core.metadata import load_sandbox_metadata
+from messaging.factory import resolve_messaging_channel
 from services.orchestrator_service import run_codex_agent
-from utils.agent_files_logs import if_session_exists_by_name
 from utils.cost import (
     build_custom_headers,
-    build_feature,
     generate_task_title,
     record_task_cost,
 )
@@ -178,9 +183,6 @@ def log_and_print(
         clean_msg = msg.strip()
         if clean_msg:
             getattr(logger, level, logger.info)(clean_msg)
-
-
-DEFAULT_MODEL = "claude-opus-4-8"
 
 
 def get_selected_model(logger: logging.Logger = None) -> str:
@@ -929,12 +931,14 @@ def run_agent(
         logger.info(f"Selected model is a codex harness model, using Codex agent.")
         started_at = datetime.now(timezone.utc).timestamp()
         subprocess_env = {**os.environ}
-        subprocess_env["NINJA_TASK_ID"] = task_id
-        subprocess_env["NINJA_FEATURE"] = build_feature(title)
-        subprocess_env["NINJA_CONVERSATION_ID"] = conversation_id
+        if cycle:
+            # Arms the Stop hook, which otherwise no-ops. Clearing the state file
+            # stops a killed run from leaking its phase into this one.
+            subprocess_env["NINJA_CYCLE_RUN"] = "1"
+            CYCLE_STATE_FILE.unlink(missing_ok=True)
         try:
             result, duration_seconds = run_codex_agent(
-                prompt, system_prompt_enabled, subprocess_env, logger
+                prompt, title, system_prompt_enabled, subprocess_env, logger
             )
             if result.stderr:
                 logger.warning(f"Codex stderr:\n{result.stderr}")
@@ -949,10 +953,17 @@ def run_agent(
                 },
             )
 
+            codex_result = parse_codex_output(result.stdout)
+            codex_model = get_selected_model()
+            codex_cost = codex_result.compute_cost(codex_model)
             t = threading.Thread(
                 target=record_task_cost,
-                args=([prompt], started_at, title),
-                kwargs={"task_id": task_id, "conversation_id": conversation_id},
+                args=([prompt], title, codex_cost),
+                kwargs={
+                    "model": codex_model,
+                    "task_id": task_id,
+                    "conversation_id": conversation_id,
+                },
             )
             t.start()
             t.join(timeout=30)
@@ -1013,94 +1024,58 @@ def run_claude_agent(
 
     custom_headers = build_custom_headers(task_id, title, conversation_id)
 
-    # Run Claude Code CLI
-    # -p: Print mode (non-interactive)
-    # Permissions are configured in ~/.claude/settings.json
-    prompt_file = None
+    env = {"ANTHROPIC_CUSTOM_HEADERS": custom_headers}
+    if cycle:
+        env["NINJA_CYCLE_RUN"] = "1"
+        CYCLE_STATE_FILE.unlink(missing_ok=True)
 
-    try:
-        if not if_session_exists_by_name("orchestrator"):
-            session_args = ["-n", "orchestrator"]
-        else:
-            session_args = ["-r", "orchestrator"]
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".txt", delete=False, encoding="utf-8"
-        ) as f:
-            f.write(prompt)
-            prompt_file = f.name
+    spec = AgentRunConfig(
+        prompt=prompt,
+        system_prompt_path=(
+            SYSTEM_PROMPT_PATH_ORCHESTRATOR if system_prompt_enabled else None
+        ),
+        system_prompt_enabled=system_prompt_enabled,
+        tools=["Bash", "Edit", "Read", "Skill", "Write"],
+        timeout_seconds=CLAUDE_RUN_ORCHESTRATOR_TIMEOUT_SECONDS,
+        session_name="orchestrator",
+        cwd=REPO_ROOT,
+        env=env,
+        process_label="orchestrator",
+        title=title,
+    )
 
-        subprocess_env = {
-            **os.environ,
-            "ANTHROPIC_CUSTOM_HEADERS": custom_headers,
-            "CLAUDE_PROMPT_FILE": prompt_file,
-        }
-        subprocess_env["CLAUDE_TIMEOUT"] = str(CLAUDE_RUN_ORCHESTRATOR_TIMEOUT_SECONDS)
-        if cycle:
-            subprocess_env["NINJA_CYCLE_RUN"] = "1"
-            CYCLE_STATE_FILE.unlink(missing_ok=True)
+    provider = ClaudeProvider()
+    claude_started = time.monotonic()
+    result = provider.run(spec, agent_logger)
+    capture(
+        "agent_provider_run_duration",
+        {
+            "process": "orchestrator",
+            "provider": "claude",
+            "duration_seconds": round(time.monotonic() - claude_started, 2),
+        },
+    )
 
-        print(f"System prompt enabled: {system_prompt_enabled}")
-        claude_started = time.monotonic()
-        if system_prompt_enabled:
-            result = subprocess.run(
-                [
-                    str(REPO_ROOT / "claude-wrapper.sh"),
-                    *session_args,
-                    "--system-prompt-file",
-                    f"{SYSTEM_PROMPT_PATH_ORCHESTRATOR}",
-                    "--tools",
-                    "Bash,Edit,Read,Skill,Write",
-                    "-p",
-                ],
-                cwd=str(REPO_ROOT),
-                timeout=CLAUDE_RUN_ORCHESTRATOR_TIMEOUT_SECONDS + 60,
-                capture_output=True,
-                text=True,
-                env=subprocess_env,
-            )
-        else:
-            result = subprocess.run(
-                [str(REPO_ROOT / "claude-wrapper.sh"), *session_args, "-p"],
-                cwd=str(REPO_ROOT),
-                timeout=CLAUDE_RUN_ORCHESTRATOR_TIMEOUT_SECONDS + 60,
-                capture_output=True,
-                text=True,
-                env=subprocess_env,
-            )
-        capture(
-            "agent_provider_run_duration",
-            {
-                "process": "orchestrator",
-                "provider": "claude",
-                "duration_seconds": round(time.monotonic() - claude_started, 2),
-            },
-        )
-        if result.stdout:
-            agent_logger.info(f"Claude output:\n{result.stdout}")
-        if result.stderr:
-            agent_logger.warning(f"Claude stderr:\n{result.stderr}")
-
+    parsed = result.parsed
+    text_output = parsed.text if parsed else result.stdout
+    if text_output:
+        agent_logger.info(f"Claude output:\n{text_output}")
+    if result.stderr:
+        agent_logger.warning(f"Claude stderr:\n{result.stderr}")
+    if parsed and parsed.is_error:
+        agent_logger.error(f"Claude reported error: subtype={parsed.subtype}")
+    if parsed and not parsed.is_error and parsed.total_cost_usd > 0:
         t = threading.Thread(
             target=record_task_cost,
-            args=([prompt], started_at, title),
-            kwargs={"task_id": task_id, "conversation_id": conversation_id},
+            args=([prompt], title, parsed.total_cost_usd),
+            kwargs={
+                "model": primary_model(parsed),
+                "task_id": task_id,
+                "conversation_id": conversation_id,
+            },
         )
         t.start()
-        t.join(timeout=30)  # wait for cost write before process exits
-    except subprocess.TimeoutExpired:
-        agent_logger.warning(
-            f"⏰ Claude CLI timed out after {(CLAUDE_RUN_ORCHESTRATOR_TIMEOUT_SECONDS + 60) // 60} minutes"
-        )
-    except FileNotFoundError:
-        agent_logger.error("❌ Claude CLI not found!")
-        agent_logger.error("Claude CLI is REQUIRED to run agents.")
-        agent_logger.error("Please install Claude Code CLI first.")
-        sys.exit(1)
-    except OSError as e:
-        agent_logger.error(f"⚠️ OS error running Claude: {e}")
-    finally:
-        if prompt_file:
-            os.unlink(prompt_file)
+        t.join(timeout=30)
 
     agent_logger.info(f"\n✅ {agent['name']} completed\n")
 
@@ -1314,8 +1289,9 @@ Configuration:
         logger.error("❌ Cannot start without settings.json. Exiting.")
         sys.exit(1)
 
-    # Login to GitHub CLI
-    login_github_cli(logger)
+    # Login to GitHub CLI (skip for local channel — no git repo / mcp-token)
+    if resolve_messaging_channel() != "local":
+        login_github_cli(logger)
 
     # Update lock file with agent name
     update_lock_file(agent["name"])

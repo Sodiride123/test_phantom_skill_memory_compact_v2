@@ -90,6 +90,34 @@ def forced_thread_for_batch(pending_messages: list) -> Optional[str]:
     return str(thread_ts) if thread_ts else None
 
 
+def mark_handled(
+    seen_messages: set, agent_data: Dict[str, Any], pending_messages: list
+) -> None:
+    """Record a dispatched batch as done, so it is never picked up again.
+
+    The monitor calls this once a run has answered the batch — or once it has
+    given up on it. A batch that is queued but neither answered nor abandoned
+    stays unmarked, so the next poll retries it instead of losing the question.
+
+    Uses the pending-message convention every adapter builds: ``timestamp`` is
+    the message id, and ``thread_ts`` is the thread root for a reply or the
+    message's own id for a top-level post.
+    """
+    seen_replies = set(agent_data.get("seen_replies", []))
+    for message in pending_messages:
+        message_id = message.get("timestamp")
+        parent_id = message.get("thread_ts")
+        # Cron entries are synthetic (``cron:<id>:<unix>``) and de-duplicated by
+        # claim_cron, so they must not consume the bounded seen store.
+        if not message_id or message.get("type") == "cron":
+            continue
+        if parent_id and parent_id != message_id:
+            seen_replies.add(f"{parent_id}:{message_id}")
+        else:
+            seen_messages.add(message_id)
+    agent_data["seen_replies"] = list(seen_replies)
+
+
 # Sandbox URL conversion. Converts 0.0.0.0:<port> references in messages to
 # public sandbox URLs. Every adapter must run this before rendering: a bare
 # 0.0.0.0:<port> is not a URL, so Markdown renderers leave it as inert text.

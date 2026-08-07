@@ -13,7 +13,6 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 import uuid
@@ -22,7 +21,9 @@ from pathlib import Path
 from typing import Optional
 
 from agent_providers.base import AgentRunConfig
-from agent_providers.codex.codex_provider import CodexProvider
+from agent_providers.claude.claude_output import primary_model
+from agent_providers.claude.claude_provider import ClaudeProvider, detect_api_error
+from agent_providers.codex.codex_provider import CodexProvider, parse_codex_output
 from clients.posthog_client import capture, is_feature_enabled
 from clients.super_ninja_client import get_super_ninja_url, get_thread_id
 from constants import (
@@ -40,17 +41,14 @@ from constants import (
 from core.config import is_orchestrator_enabled
 from core.logging import get_logger
 from messaging.message_utils import FORCE_THREAD_ENV, forced_thread_for_batch
-from utils.agent_files_logs import if_session_exists_by_name
 from utils.cost import (
     build_custom_headers,
-    build_feature,
     generate_task_title,
     record_task_cost,
 )
 from utils.system_notification import get_disk_warning
 
 from ninja.core.metadata import get_selected_model
-from ninja.tools.claude_utils import get_api_error_in_session
 
 logger = get_logger(MONITOR_SERVICE_NAME)
 
@@ -357,33 +355,38 @@ def run_batched_response(
     else:
         subprocess_env.pop(FORCE_THREAD_ENV, None)
 
-    prompt_file = None
     try:
         model = get_selected_model()
         if codex_harness_enabled:
-            # These env vars are used by the Codex harness to set the headers for the request
-            subprocess_env["NINJA_TASK_ID"] = task_id
-            subprocess_env["NINJA_FEATURE"] = build_feature(title)
-            subprocess_env["NINJA_CONVERSATION_ID"] = conversation_id
             logger.info(
                 f"Selected model {model} is a Codex harness model, using Codex for batch response"
             )
             result, duration = get_codex_response(
-                subprocess_env, system_prompt_enabled, prompt
+                subprocess_env, system_prompt_enabled, prompt, title
             )
         else:
             logger.info(f"Selected model is {model}, using Claude for batch response")
             result, duration = get_claude_response(
-                subprocess_env, system_prompt_enabled, prompt, prompt_file
+                subprocess_env, system_prompt_enabled, prompt
             )
-            # Check for claude api error in claude project logs
-            try:
-                api_error = get_api_error_in_session("monitor", MONITOR_SERVICE_NAME)
-            except Exception as e:
-                logger.warning(f"Could not run API-error transcript check: {e}")
-
-            if api_error:
-                logger.error(f"Detected API error in Claude session logs: {api_error}")
+            # Detect API errors from structured JSON output + stderr
+            # (replaces the old JSONL transcript scan).
+            parsed = result.parsed
+            if parsed and parsed.is_error:
+                logger.error(
+                    f"Detected API error in Claude result: subtype={parsed.subtype}"
+                )
+                capture(
+                    "claude_api_error",
+                    {
+                        "process": "monitor",
+                        "task_id": task_id,
+                        "conversation_id": conversation_id,
+                    },
+                )
+            api_err = detect_api_error(result)
+            if api_err:
+                logger.error(f"Detected API error from stderr: {api_err}")
                 capture(
                     "claude_api_error",
                     {
@@ -400,21 +403,54 @@ def run_batched_response(
                 "duration_seconds": duration,
             },
         )
-        output = result.stdout + result.stderr
+        # Extract text from JSON output for pattern matching.
+        # For Codex, result.stdout is plain text; for Claude it's JSON.
+        if not codex_harness_enabled and parsed and not parsed.is_error:
+            text_output = parsed.text or ""
+        else:
+            text_output = result.stdout or ""
+        output = text_output + (result.stderr or "")
         success_count = (
             output.count("Message sent")
             + output.count("✅")
             + output.count("Timestamp:")
         )
 
-        threading.Thread(
-            target=record_task_cost,
-            args=(texts, started_at, title),
-            kwargs={"task_id": task_id, "conversation_id": conversation_id},
-            daemon=True,
-        ).start()
+        # Record cost from JSON result (no JSONL scanning).
+        if (
+            not codex_harness_enabled
+            and parsed
+            and not parsed.is_error
+            and parsed.total_cost_usd > 0
+        ):
+            threading.Thread(
+                target=record_task_cost,
+                args=(texts, title, parsed.total_cost_usd),
+                kwargs={
+                    "model": primary_model(parsed),
+                    "task_id": task_id,
+                    "conversation_id": conversation_id,
+                },
+                daemon=True,
+            ).start()
+        else:
+            codex_result = (
+                parse_codex_output(result.stdout) if codex_harness_enabled else None
+            )
+            codex_model = model if codex_harness_enabled else ""
+            codex_cost = codex_result.compute_cost(codex_model) if codex_result else 0.0
+            threading.Thread(
+                target=record_task_cost,
+                args=(texts, title, codex_cost),
+                kwargs={
+                    "model": codex_model,
+                    "task_id": task_id,
+                    "conversation_id": conversation_id,
+                },
+                daemon=True,
+            ).start()
 
-        if is_customer_key_error(output):
+        if is_customer_key_error(result.stderr or ""):
             raise RunOutOfCreditsException
 
         capture(
@@ -462,61 +498,36 @@ def run_batched_response(
         capture("ninja batch response completed", {"success": False, "error": str(e)})
         logger.exception(f"Error: {e}")
         return False
-    finally:
-        if prompt_file:
-            os.unlink(prompt_file)
 
 
-def get_claude_response(
-    env: dict, system_prompt_enabled: bool, prompt: str, prompt_file: str
-):
-    if not if_session_exists_by_name("monitor"):
-        session_args = ["-n", "monitor"]
-    else:
-        session_args = ["-r", "monitor"]
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".txt", delete=False, encoding="utf-8"
-    ) as f:
-        f.write(prompt)
-        prompt_file = f.name
-        env["CLAUDE_PROMPT_FILE"] = prompt_file
-        env["CLAUDE_TIMEOUT"] = str(CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS)
-    claude_started = time.monotonic()
+def get_claude_response(env: dict, system_prompt_enabled: bool, prompt: str):
+    system_prompt_path = None
     if system_prompt_enabled:
         system_prompt_path = (
             SYSTEM_PROMPT_PATH
             if is_orchestrator_enabled()
             else SYSTEM_PROMPT_PATH_SINGLE
         )
-        result = subprocess.run(
-            [
-                str(_REPO_ROOT / "claude-wrapper.sh"),
-                *session_args,
-                "--system-prompt-file",
-                f"{system_prompt_path}",
-                "--tools",
-                "Bash,Edit,Read,Skill,Write",
-                "-p",
-            ],
-            cwd=str(_REPO_ROOT),
-            capture_output=True,
-            text=True,
-            timeout=CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS + 60,
-            env=env,
-        )
-    else:
-        result = subprocess.run(
-            [str(_REPO_ROOT / "claude-wrapper.sh"), *session_args, "-p"],
-            cwd=str(_REPO_ROOT),
-            capture_output=True,
-            text=True,
-            timeout=CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS + 60,
-            env=env,
-        )
-    return result, round(time.monotonic() - claude_started, 2)
+
+    spec = AgentRunConfig(
+        prompt=prompt,
+        system_prompt_path=system_prompt_path,
+        system_prompt_enabled=system_prompt_enabled,
+        tools=["Bash", "Edit", "Read", "Skill", "Write"],
+        timeout_seconds=CLAUDE_RUN_MONITOR_TIMEOUT_SECONDS,
+        session_name="monitor",
+        cwd=_REPO_ROOT,
+        env=env,
+        process_label="monitor",
+    )
+
+    provider = ClaudeProvider()
+    run_started = time.monotonic()
+    result = provider.run(spec, logger)
+    return result, round(time.monotonic() - run_started, 2)
 
 
-def get_codex_response(env: dict, system_prompt_enabled: bool, prompt: str):
+def get_codex_response(env: dict, system_prompt_enabled: bool, prompt: str, title: str):
 
     system_prompt_path = ""
     if system_prompt_enabled:
@@ -536,6 +547,7 @@ def get_codex_response(env: dict, system_prompt_enabled: bool, prompt: str):
         cwd=_REPO_ROOT,
         env=env,
         process_label="monitor",
+        title=title,
     )
 
     provider = CodexProvider()

@@ -110,6 +110,8 @@ if [[ -f "$SKILLS_ZIP" ]]; then
     mkdir -p "$CLAUDE_HOME"
     # -o so re-runs (upgrades) refresh the catalog; strip macOS cruft.
     unzip -o -q "$SKILLS_ZIP" -d "$CLAUDE_HOME" -x "__MACOSX/*" "*/.DS_Store"
+    # memory/ is Codex-only; Claude uses system-prompt memory paths instead.
+    rm -rf "$CLAUDE_HOME/skills/memory"
     echo "  ✓ Skills unpacked → $CLAUDE_HOME/skills"
 else
     echo "  ⚠ skills.zip not found at $SKILLS_ZIP — skipping (Skill catalog will be empty)"

@@ -41,11 +41,13 @@ from core.config import (
     load_agent_config,
     load_agent_messages,
     load_seen_messages,
+    load_sent_messages,
     save_agent_messages,
     save_seen_messages,
 )
 from core.logging import get_logger
 from messaging.factory import get_messaging_interface, resolve_messaging_channel
+from messaging.message_utils import mark_handled
 from processes.base import MonitorStrategy
 from processes.orchestrator import (
     ORCHESTRATOR_SERVICE,
@@ -75,6 +77,10 @@ MAX_RUNTIME = 24 * 60 * 60  # 24 hours in seconds
 BACKOFF_INITIAL = 60  # Initial backoff: 1 minute
 BACKOFF_MAX = 600  # Max backoff: 10 minutes
 BACKOFF_MULTIPLIER = 2
+
+# How many times a batch may be dispatched before the monitor stops retrying it.
+# Guards against a message the worker can never handle re-running every poll.
+MAX_BATCH_ATTEMPTS = 3
 
 # Liveness heartbeat — overwritten with the current unix timestamp on every poll
 # tick. processes/health_service.py reads it to surface monitor liveness to PostHog.
@@ -165,12 +171,18 @@ def maybe_sync_github_token(last_sync_check: float) -> float:
     reports "invalid" (hosts.yml token dead but mcp-token holds one), re-runs
     the orchestrator's login_github_cli() to refresh the gh session.
 
+    Skipped entirely for the local channel (canary) — no git repo / mcp-token.
+
     Returns the timestamp of this check (or last_sync_check if skipped).
     Best-effort — never raises.
     """
     now = time.time()
     if now - last_sync_check < GH_TOKEN_SYNC_INTERVAL:
         return last_sync_check
+
+    # Local channel (canary) has no git repo or mcp-token — skip entirely.
+    if resolve_messaging_channel() == "local":
+        return now
 
     try:
         result = check_github_token()
@@ -211,8 +223,7 @@ def maybe_launch_orchestrator() -> bool:
         return False
 
     logger.info(
-        f"{open_issues} open issue(s) and orchestrator idle launching",
-        flush=True,
+        f"{open_issues} open issue(s) and orchestrator idle — launching",
     )
     try:
         result = subprocess.run(
@@ -337,7 +348,9 @@ class PollingMonitorStrategy(MonitorStrategy):
 
         # Cold start (fresh install or a reclone that wiped local state): baseline the current channel history so we don't re-ack/re-answer the whole
         # backlog. Only messages arriving after startup are processed.
-        if not seen_messages:
+        # ``primed`` is set by the adapter that baselines, so a restart cannot
+        # re-baseline messages that are queued but not yet answered.
+        if not seen_messages and not agent_data.get("primed"):
             iface.prime_seen_state(seen_messages, agent_data)
             save_seen_messages(seen_messages)
             save_agent_messages(agent_data)
@@ -345,6 +358,14 @@ class PollingMonitorStrategy(MonitorStrategy):
         start_time = time.time()
         last_heartbeat = 0.0
         last_gh_sync_check = 0.0
+        # Teams only: seen-marks are written after a run actually answers, so an
+        # unanswered batch is retried instead of being lost. The other adapters
+        # still mark at collection time and keep their existing behavior.
+        # TO DO : teams-specific read/seen/sent messages logic should go away after teams cache
+        retry_unanswered = channel == "teams"
+        # Failure count per dispatched batch, so a batch the worker cannot handle
+        # is retried a bounded number of times instead of every poll forever.
+        failed_batches: dict[frozenset, int] = {}
 
         # Pre-populate the heartbeat before post_welcome_if_needed so the
         # health service doesn't false-alarm on the first check after startup.
@@ -459,6 +480,63 @@ class PollingMonitorStrategy(MonitorStrategy):
                             flush=True,
                         )
                         logger.warning("Cost limit exceeded — dispatch blocked")
+                    elif retry_unanswered:
+                        posted_before = load_sent_messages()
+                        dispatched = run_batched_response(
+                            agent, pending_messages, iface.say
+                        )
+                        # A run counts as answered only if it actually posted.
+                        # The exit status alone is not enough: a worker killed
+                        # mid-task (sandbox suspended, /tmp wiped) can still look
+                        # like a clean run.
+                        answered = dispatched and bool(
+                            load_sent_messages() - posted_before
+                        )
+                        # Cross-cycle safety net: a prior cycle may have already
+                        # posted the reply, and this run correctly declined to
+                        # duplicate it, so the same-cycle delta above is empty.
+                        # Without this check the monitor keeps counting a
+                        # successfully-answered batch as failing and eventually
+                        # fires a false "couldn't finish it" notice. Only worth
+                        # the extra thread fetch when the cheap check missed.
+                        if not answered and iface.batch_already_answered(
+                            pending_messages
+                        ):
+                            answered = True
+                        batch_key = frozenset(
+                            m.get("timestamp") for m in pending_messages
+                        )
+                        if answered:
+                            failed_batches.pop(batch_key, None)
+                            mark_handled(seen_messages, agent_data, pending_messages)
+                        else:
+                            # Left unmarked, so the next poll re-collects and
+                            # retries instead of dropping the question silently.
+                            attempts = failed_batches[batch_key] = (
+                                failed_batches.get(batch_key, 0) + 1
+                            )
+                            give_up = attempts >= MAX_BATCH_ATTEMPTS
+                            if give_up:
+                                # Say so before abandoning it: a silent drop is
+                                # the failure this retry loop exists to prevent.
+                                try:
+                                    iface.say(
+                                        "⚠️ I hit repeated errors working on your "
+                                        "last message and couldn't finish it. "
+                                        "Please send it again."
+                                    )
+                                except RuntimeError as e:
+                                    # TeamsAPIError/TeamsConfigError — a lost
+                                    # notice must not break the poll loop.
+                                    logger.warning(f"Give-up notice failed: {e}")
+                                mark_handled(
+                                    seen_messages, agent_data, pending_messages
+                                )
+                            logger.error(
+                                f"Batch of {len(pending_messages)} message(s) not"
+                                f" answered (try {attempts}/{MAX_BATCH_ATTEMPTS}) —"
+                                f" {'giving up' if give_up else 'retrying next poll'}"
+                            )
                     else:
                         run_batched_response(agent, pending_messages, iface.say)
                 else:

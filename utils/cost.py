@@ -30,6 +30,10 @@ TASK_LOG_FILE = Path("/workspace/ninja/.task_log.jsonl")
 
 _TITLE_SYSTEM_PROMPT = "You are a helpful assistant that generates extremely concise titles (2-4 words maximum) for tasks based on the user's message. Respond with only the title, no other text or punctuation."
 _TITLE_USER_PROMPT = "Generate an extremely brief title (2-4 words only) for a task that starts with this message:\n{prompt}"
+# The start of the prompt is enough to name a task. Sending all of it (the
+# orchestrator's prompt is huge) just makes this call time out.
+_TITLE_PROMPT_LIMIT = 400
+_MAX_FEATURE_LEN = 120
 
 
 def get_spend_stats() -> dict:
@@ -65,76 +69,6 @@ def get_spend_stats() -> dict:
         "daily_spend": daily,
         "task_count": count,
     }
-
-
-def get_last_task_cost(jsonl_path: Path) -> tuple[str | None, str, float]:
-    """Extract tokens from the last task in a JSONL file and return (prompt_uuid, model, cost)."""
-    (
-        prompt_uuid,
-        model,
-        input_tokens,
-        output_tokens,
-        cache_write_tokens,
-        cache_read_tokens,
-    ) = extract_last_task_tokens(jsonl_path)
-    cost = compute_cost(
-        model, input_tokens, output_tokens, cache_write_tokens, 0, cache_read_tokens
-    )
-    return prompt_uuid, model, cost
-
-
-def extract_last_task_tokens(
-    jsonl_path: Path,
-) -> tuple[str | None, str, int, int, int, int]:
-    """Parse a Claude JSONL session file and return the last task's prompt UUID and token counts.
-
-    Returns (prompt_uuid, model, input_tokens, output_tokens, cache_write_tokens, cache_read_tokens).
-    Resets counters on each real user message so only the final task's data is returned.
-    """
-
-    prompt_uuid: str | None = None
-    model = ""
-    input_tokens = output_tokens = cache_write_tokens = cache_read_tokens = 0
-    seen_message_ids: set[str] = set()
-
-    with open(jsonl_path, encoding="utf-8", errors="ignore") as f:
-        for line in f:
-            try:
-                entry = json.loads(line)
-                if entry.get("type") == "user" and isinstance(
-                    entry.get("message", {}).get("content"), str
-                ):
-                    prompt_uuid = entry.get("uuid")
-                    model = ""
-                    input_tokens = output_tokens = cache_write_tokens = (
-                        cache_read_tokens
-                    ) = 0
-                    seen_message_ids = set()
-                elif entry.get("type") == "assistant":
-                    msg = entry.get("message", {})
-                    msg_id = msg.get("id")
-                    if msg_id and msg_id in seen_message_ids:
-                        continue
-                    if msg_id:
-                        seen_message_ids.add(msg_id)
-                    if msg.get("model"):
-                        model = msg["model"]
-                    usage = msg.get("usage", {})
-                    input_tokens += usage.get("input_tokens", 0)
-                    output_tokens += usage.get("output_tokens", 0)
-                    cache_write_tokens += usage.get("cache_creation_input_tokens", 0)
-                    cache_read_tokens += usage.get("cache_read_input_tokens", 0)
-            except json.JSONDecodeError:
-                pass
-
-    return (
-        prompt_uuid,
-        model,
-        input_tokens,
-        output_tokens,
-        cache_write_tokens,
-        cache_read_tokens,
-    )
 
 
 def compute_cost(
@@ -273,43 +207,46 @@ def record_tool_call_cost(
 
 def record_task_cost(
     texts: list[str],
-    started_at: float,
     title: str,
+    cost: float,
+    model: str = "",
     task_id: str | None = None,
     conversation_id: str | None = None,
 ) -> None:
-    """Compute cost from token usage and write task log."""
+    """Write a task-log entry with cost data from ``--output-format json``.
+
+    Callers obtain *cost* from ``ClaudeResult.total_cost_usd`` and *model*
+    from ``primary_model(parsed)`` — no JSONL transcript scanning needed.
+    """
     try:
-        claude_projects = Path.home() / ".claude" / "projects"
-        newest_file, newest_mtime = None, 0.0
-        for f in claude_projects.rglob("*.jsonl"):
-            mtime = f.stat().st_mtime
-            if mtime >= started_at and mtime > newest_mtime:
-                newest_file, newest_mtime = f, mtime
-
-        if not newest_file:
-            return
-
-        prompt_uuid, model, cost = get_last_task_cost(newest_file)
-        if prompt_uuid:
-            _write_task_log(
-                prompt_uuid,
-                cost,
-                texts,
-                title,
-                model=model,
-                task_id=task_id,
-                conversation_id=conversation_id,
-            )
+        _write_task_log(
+            str(uuid.uuid4()),
+            cost,
+            texts,
+            title,
+            model=model,
+            task_id=task_id,
+            conversation_id=conversation_id,
+        )
     except Exception as e:
-        print(f"⚠️ Could not compute cost: {e}", file=sys.stderr)
+        print(f"⚠️ Could not record task cost: {e}", file=sys.stderr)
+
+
+def _header_safe(value: str) -> str:
+    """Flatten a string so it is safe as an HTTP header value.
+    When title generation fails we fall back to raw prompt text, which has
+    line breaks. Claude Code reads our headers one per line, so a single
+    newline in here makes it reject the whole request.
+    """
+    value = "".join(" " if c in "\r\n\t" or ord(c) < 32 else c for c in value)
+    return " ".join(value.split())[:_MAX_FEATURE_LEN]
 
 
 def build_feature(title: str):
     channel = load_agent_config().get("default_channel", "")
     feature = f"{channel} - {title}" if channel else title
     feature = feature.encode("ascii", errors="ignore").decode("ascii")
-    return feature
+    return _header_safe(feature)
 
 
 def build_custom_headers(
@@ -358,7 +295,9 @@ def generate_task_title(
                     {"role": "system", "content": _TITLE_SYSTEM_PROMPT},
                     {
                         "role": "user",
-                        "content": _TITLE_USER_PROMPT.format(prompt=prompt),
+                        "content": _TITLE_USER_PROMPT.format(
+                            prompt=prompt[:_TITLE_PROMPT_LIMIT]
+                        ),
                     },
                 ],
                 "max_tokens": 20,
