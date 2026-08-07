@@ -27,6 +27,7 @@ import argparse
 import json
 import os
 import socket
+import subprocess
 import sys
 import time
 import urllib.error
@@ -63,6 +64,10 @@ IP_ECHO_URL = "https://api.ipify.org?format=json"
 
 # A heartbeat file older than this (seconds) means the monitor has stalled.
 MONITOR_STALE_AFTER = 5 * 60  # 5 minutes
+
+# User-facing model-pricing dashboard (issue #135): systemd unit + URL to probe.
+MODEL_PRICING_UNIT = "ninja-model-pricing.service"
+MODEL_PRICING_URL = "http://localhost:8899/index.html"
 
 
 def _print(msg: str) -> None:
@@ -303,6 +308,70 @@ def check_monitor_health() -> int:
     return 0
 
 
+def _model_pricing_unit_facts() -> tuple[str, int | None]:
+    """Return (active_state, nrestarts) for the dashboard unit via systemctl.
+
+    Parses Key=Value lines (no --value) because --value prints one line per
+    property in an order that does not reliably match the -p order. nrestarts
+    is included in failure events as crash-loop context: a unit can answer
+    HTTP while flap-restarting, and a large counter is the tell.
+    Raises subprocess.CalledProcessError/TimeoutExpired on systemctl failure.
+    """
+    out = subprocess.run(
+        ["systemctl", "show", MODEL_PRICING_UNIT, "-p", "ActiveState,NRestarts"],
+        capture_output=True, text=True, timeout=10, check=True,
+    ).stdout
+    facts = dict(
+        line.split("=", 1) for line in out.splitlines() if "=" in line
+    )
+    active = facts.get("ActiveState", "unknown")
+    try:
+        nrestarts = int(facts["NRestarts"])
+    except (KeyError, ValueError):
+        nrestarts = None
+    return active, nrestarts
+
+
+def check_model_pricing_health() -> int:
+    """Emit ``ninja model-pricing health`` (error=1) only if the dashboard is down.
+
+    Two-layer probe of the user-facing pricing dashboard (#133/#135): the
+    systemd unit must be active AND the page must answer HTTP < 400. systemd's
+    Restart=on-failure covers transient crashes; this catches persistent
+    failure (restart-loop exhaustion, port conflict, bad deploy). Returns 1 on
+    error, 0 on success.
+    """
+    try:
+        active, nrestarts = _model_pricing_unit_facts()
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+        _emit_error("ninja model-pricing health", "systemctl_error",
+                    message=str(e)[:120])
+        _print(f"📊 Model-pricing dashboard ERROR (systemctl: {str(e)[:120]})")
+        return 1
+
+    if active != "active":
+        _emit_error("ninja model-pricing health", f"unit_{active}",
+                    unit=MODEL_PRICING_UNIT, nrestarts=nrestarts)
+        _print(f"📊 Model-pricing dashboard ERROR "
+               f"(unit {MODEL_PRICING_UNIT} is {active}, restarts={nrestarts})")
+        return 1
+
+    try:
+        with urllib.request.urlopen(MODEL_PRICING_URL, timeout=5) as resp:
+            if resp.status >= 400:
+                raise urllib.error.HTTPError(
+                    MODEL_PRICING_URL, resp.status, "error", resp.headers, None)
+    except (urllib.error.URLError, socket.timeout, TimeoutError, OSError) as e:
+        _emit_error("ninja model-pricing health", "http_error",
+                    message=str(e)[:120], nrestarts=nrestarts)
+        _print(f"📊 Model-pricing dashboard ERROR "
+               f"({MODEL_PRICING_URL}: {str(e)[:120]}, restarts={nrestarts})")
+        return 1
+
+    _print(f"📊 Model-pricing dashboard OK (unit active, restarts={nrestarts})")
+    return 0
+
+
 def main():
     channel = os.environ.get("MESSAGING_CHANNEL", "slack")
 
@@ -350,6 +419,7 @@ def main():
             "litellm": _safe(check_litellm_health),
             "pipedream": _safe(check_pipedream_health),
             "vpn": _safe(check_vpn_health),
+            "model_pricing": _safe(check_model_pricing_health),
         }
         write_health_heartbeat()
         if args.status_file:
@@ -361,7 +431,8 @@ def main():
 
     _print(
         f"🏥 Health service started — checking {channel}, GitHub, LiteLLM, "
-        f"Pipedream, VPN and monitor every {args.interval // 60} min"
+        f"Pipedream, VPN, monitor and model-pricing dashboard "
+        f"every {args.interval // 60} min"
     )
 
     checks = (
@@ -371,6 +442,7 @@ def main():
         ("pipedream", check_pipedream_health),
         ("vpn", check_vpn_health),
         ("monitor", check_monitor_health),
+        ("model_pricing", check_model_pricing_health),
     )
 
     try:
