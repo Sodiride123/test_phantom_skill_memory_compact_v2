@@ -55,6 +55,22 @@
     <div class="chart-wrap"><canvas id="price-chart"></canvas></div>
   </section>
 
+  <!-- ---------------- Price trend over time ---------------- -->
+  <section id="trend">
+    <h2>Price trend over time</h2>
+    <div class="chart-controls">
+      <label>Metric:
+        <select id="trend-metric">
+          <option value="output_price">Output price</option>
+          <option value="input_price">Input price</option>
+          <option value="blended">Blended (1:1 in/out)</option>
+        </select>
+      </label>
+    </div>
+    <p id="trend-note" class="trend-note"></p>
+    <div class="chart-wrap"><canvas id="trend-chart"></canvas></div>
+  </section>
+
   <!-- ---------------- Filters + table ---------------- -->
   <section id="table-section">
     <h2>Comparison table</h2>

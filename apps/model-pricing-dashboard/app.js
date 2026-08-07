@@ -36,17 +36,24 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
 // recent runs); empty object when there's no history or nothing changed.
 let CHANGES = {};
 
+// Raw price_history snapshots (for the provider price-trend chart) and the
+// chart instance. Empty array when there's no history.
+let HISTORY = [];
+let trendChart = null;
+
 async function init() {
   const res = await fetch("data/models.json");
   DATA = await res.json();
   MODELS = DATA.models;
-  CHANGES = await loadChanges();
+  HISTORY = await loadHistory();
+  CHANGES = deriveChanges(HISTORY);
 
   renderMeta();
   renderDataHealth();
   populateFilters();
   renderBestValue();
   renderChart();
+  renderTrend();
   attachEvents();
   render();
 }
@@ -59,17 +66,17 @@ function renderMeta() {
     `${DATA.model_count} models · ${DATA.provider_count} providers`;
 }
 
-// Fetch price_history.json and derive per-model price changes between the two
-// most recent snapshots. Pure derivation lives in deriveChanges() so it can be
-// regression-tested without a network/DOM.
-async function loadChanges() {
+// Fetch price_history.json (the raw snapshot list) once; both the change badges
+// (deriveChanges) and the trend chart (buildTrend) derive from it. Fail-soft:
+// no history / unparseable -> [], so the table still renders.
+async function loadHistory() {
   try {
     const r = await fetch("data/price_history.json");
-    if (!r.ok) return {};
+    if (!r.ok) return [];
     const hist = await r.json();
-    return deriveChanges(hist);
+    return Array.isArray(hist) ? hist : [];
   } catch (e) {
-    return {}; // no history / unparseable -> no badges, never break the table
+    return [];
   }
 }
 
@@ -104,7 +111,7 @@ function deriveChanges(history) {
 // Exported for the no-DOM regression test (test_changes.js imports via a
 // CommonJS shim); harmless in the browser.
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { deriveChanges };
+  module.exports = { deriveChanges, buildTrend, trendMetric };
 }
 
 // Read-only data-health summary: provenance mix + freshness + drift, all
@@ -433,6 +440,103 @@ function metricLabel(m) {
   return m === "output_price" ? "output price" : m === "input_price" ? "input price" : "blended price";
 }
 
+// ---------------- Provider price trend over time (issue #115) ----------------
+// Pure derivation: from price_history snapshots, build a per-provider time
+// series of the AVERAGE price (input / output / blended) across that provider's
+// models at each run. Providers with no numeric models in a run get a null
+// (Chart.js spans the gap), so sparse history is handled gracefully.
+// Returns {labels: [dates], providers: {Provider: [avg|null, ...]}}.
+function buildTrend(history, metric) {
+  const labels = [];
+  const series = {};
+  if (!Array.isArray(history)) return { labels, providers: series };
+  for (const snap of history) {
+    if (!snap || !snap.prices) continue;
+    labels.push((snap.date || "").slice(0, 10));
+    const sums = {};  // provider -> {sum, n}
+    for (const [key, rec] of Object.entries(snap.prices)) {
+      const prov = key.split("/", 1)[0];
+      const v = trendMetric(rec, metric);
+      if (typeof v !== "number" || !isFinite(v)) continue;
+      (sums[prov] = sums[prov] || { sum: 0, n: 0 });
+      sums[prov].sum += v;
+      sums[prov].n += 1;
+    }
+    for (const prov of Object.keys(PROVIDER_COLOR)) {
+      (series[prov] = series[prov] || []).push(
+        sums[prov] && sums[prov].n ? +(sums[prov].sum / sums[prov].n).toFixed(3) : null
+      );
+    }
+  }
+  // Drop providers with no data at all (keeps the legend clean).
+  for (const prov of Object.keys(series)) {
+    if (series[prov].every((v) => v === null)) delete series[prov];
+  }
+  return { labels, providers: series };
+}
+
+function trendMetric(rec, metric) {
+  if (metric === "input_price") return rec.input;
+  if (metric === "output_price") return rec.output;
+  // blended 1:1 — needs both sides
+  if (typeof rec.input === "number" && typeof rec.output === "number")
+    return (rec.input + rec.output) / 2;
+  return null;
+}
+
+function renderTrend() {
+  const canvas = document.getElementById("trend-chart");
+  if (!canvas || typeof Chart === "undefined") return;
+  const metric = (document.getElementById("trend-metric") || {}).value || "output_price";
+  const note = document.getElementById("trend-note");
+
+  const { labels, providers } = buildTrend(HISTORY, metric);
+  if (labels.length < 2) {
+    if (note) note.textContent = "Not enough pricing history yet — need at least 2 refresh runs.";
+    if (trendChart) { trendChart.destroy(); trendChart = null; }
+    return;
+  }
+  if (note) {
+    const active = Object.keys(providers).length;
+    note.textContent =
+      `Average ${metricLabel(metric)} per provider across ${labels.length} refresh runs. ` +
+      `Click a legend item to show/hide that provider.`;
+  }
+
+  const datasets = Object.keys(providers).map((prov) => ({
+    label: prov,
+    data: providers[prov],
+    borderColor: PROVIDER_COLOR[prov] || "#888",
+    backgroundColor: PROVIDER_COLOR[prov] || "#888",
+    spanGaps: true,           // connect across runs where the provider had no data
+    tension: 0.25,
+    pointRadius: 3,
+    borderWidth: 2,
+  }));
+
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(canvas.getContext("2d"), {
+    type: "line",
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: true, labels: { color: "#e6ebf5", boxWidth: 14 } },
+        title: { display: true, text: "Average " + metricLabel(metric) + " by provider over time ($/1M)", color: "#e6ebf5", font: { size: 15 } },
+        tooltip: {
+          callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y === null ? "—" : "$" + c.parsed.y.toFixed(2)}` },
+        },
+      },
+      scales: {
+        x: { ticks: { color: "#94a2bd" }, grid: { color: "#2a3550" } },
+        y: { ticks: { color: "#e6ebf5", callback: (v) => "$" + v }, grid: { color: "#2a3550" } },
+      },
+    },
+  });
+}
+
 // ---------------- Export ----------------
 const EXPORT_COLUMNS = [
   "provider", "name", "family",
@@ -531,6 +635,9 @@ function attachEvents() {
   ["chart-metric", "chart-view"].forEach((id) =>
     document.getElementById(id).addEventListener("change", renderChart)
   );
+
+  const trendMetricEl = document.getElementById("trend-metric");
+  if (trendMetricEl) trendMetricEl.addEventListener("change", renderTrend);
 
   document.getElementById("hl-fallback").addEventListener("change", (e) => {
     document.body.classList.toggle("hl-fallback", e.target.checked);

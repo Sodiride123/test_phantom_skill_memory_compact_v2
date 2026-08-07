@@ -108,6 +108,7 @@ h2 { margin: 0 0 14px; font-size: 18px; }
 /* ---------- Charts ---------- */
 .chart-controls { display: flex; gap: 18px; margin-bottom: 14px; flex-wrap: wrap; }
 .chart-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; height: 420px; }
+.trend-note { color: #94a2bd; font-size: 13px; margin: 0 0 10px; }
 
 /* ---------- Filters ---------- */
 .filters {
