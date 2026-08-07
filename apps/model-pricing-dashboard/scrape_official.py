@@ -180,6 +180,48 @@ def _history_drift(prev, models, threshold=DRIFT_THRESHOLD):
     return out
 
 
+def _official_coverage(models):
+    """Per-provider count of models whose price provenance is 'official'."""
+    cov = {}
+    for m in models:
+        prov = m["provider"]
+        cov.setdefault(prov, 0)
+        if m["provenance"].get("input_price") == bd.OFFICIAL:
+            cov[prov] += 1
+    return cov
+
+
+def _coverage_from_snapshot(snap):
+    """Per-provider 'official' count read from a history snapshot's price
+    records (each key is 'Provider/Model', each value has a provenance tier)."""
+    cov = {}
+    for key, rec in (snap or {}).get("prices", {}).items():
+        prov = key.split("/", 1)[0]
+        cov.setdefault(prov, 0)
+        if rec.get("provenance") == bd.OFFICIAL:
+            cov[prov] += 1
+    return cov
+
+
+def _coverage_regressions(prev, models):
+    """Providers whose official-price coverage was >=1 in the previous run but
+    dropped to 0 in this one — the fingerprint of a silent parser/layout break
+    (see issue #111, where docs.x.ai changed shape and xAI quietly went to 0).
+
+    Providers already at 0 last run (e.g. Mistral, whose page has no API token
+    prices) are excluded so a structural zero is never a false alarm."""
+    if not prev:
+        return []
+    prev_cov = _coverage_from_snapshot(prev)
+    now_cov = _official_coverage(models)
+    out = []
+    for prov, prev_n in sorted(prev_cov.items()):
+        if prev_n >= 1 and now_cov.get(prov, 0) == 0:
+            out.append({"provider": prov, "from": prev_n, "to": 0,
+                        "vs": prev.get("date")})
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Per-provider parsers. Each takes the rendered page text and returns
 # {normalized_name: {"name": display, "input": float|None,
@@ -661,6 +703,7 @@ def overlay(dry_run=False, validate=True):
     history = _load_history(HISTORY_PATH)
     prev_snapshot = history[-1] if history else None
     drift_vs_prev = _history_drift(prev_snapshot, dataset["models"])
+    coverage_regressions = _coverage_regressions(prev_snapshot, dataset["models"])
 
     dataset["last_collected"] = date_str
     dataset["generated_at"] = now.isoformat()
@@ -677,6 +720,7 @@ def overlay(dry_run=False, validate=True):
         "drift_threshold_pct": DRIFT_THRESHOLD * 100,
         "drift": drift,
         "drift_vs_previous_run": drift_vs_prev,
+        "coverage_regressions": coverage_regressions,
         "history_compared_to": prev_snapshot.get("date") if prev_snapshot else None,
         "not_scraped": {
             "Mistral": "mistral.ai/pricing lists subscription plans only, "
@@ -707,6 +751,15 @@ def overlay(dry_run=False, validate=True):
         for d in drift_vs_prev:
             print(f"    {d['model']} {d['field']}: {d['from']} -> {d['to']} "
                   f"({d['pct']}%, {d['tier']})")
+
+    print(f"\nCoverage regressions (official -> 0 vs previous run): "
+          f"{len(coverage_regressions)}")
+    if coverage_regressions:
+        print("  ⚠⚠ a provider that had official prices last run has 0 now — "
+              "likely a silent parser/layout break, investigate:")
+        for c in coverage_regressions:
+            print(f"    {c['provider']}: {c['from']} -> 0 official "
+                  f"(vs {c['vs']})")
 
     if dry_run:
         print("\n--dry-run: not writing data/models.json or price_history.json")

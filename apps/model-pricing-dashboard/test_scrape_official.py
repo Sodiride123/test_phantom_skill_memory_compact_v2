@@ -236,6 +236,43 @@ def test_history_drift_no_prev_is_empty():
     assert so._history_drift(None, [_model("X", "Y", 1, 1, 1, "official")]) == []
 
 
+def test_coverage_regression_flags_drop_to_zero():
+    # Previous run: xAI had 1 official, Mistral 0 (structural), OpenAI 2.
+    prev = so._snapshot(
+        [_model("Grok 4.5", "xAI", 2.0, 0.5, 6.0, "official"),
+         _model("Mistral Small 4", "Mistral", 0.10, None, 0.30, "fallback"),
+         _model("GPT-4o", "OpenAI", 2.5, 1.25, 10.0, "official"),
+         _model("GPT-4o mini", "OpenAI", 0.15, 0.075, 0.6, "official")],
+        "2026-08-01T09:00:00Z",
+    )
+    # This run: xAI parser broke (both xAI rows now fallback), OpenAI unchanged.
+    now = [
+        _model("Grok 4.5", "xAI", 2.0, 0.5, 6.0, "fallback"),
+        _model("Mistral Small 4", "Mistral", 0.10, None, 0.30, "fallback"),
+        _model("GPT-4o", "OpenAI", 2.5, 1.25, 10.0, "official"),
+        _model("GPT-4o mini", "OpenAI", 0.15, 0.075, 0.6, "official"),
+    ]
+    regs = so._coverage_regressions(prev, now)
+    assert regs == [{"provider": "xAI", "from": 1, "to": 0,
+                     "vs": "2026-08-01T09:00:00Z"}]
+
+
+def test_coverage_regression_ignores_structural_zero_and_stable():
+    # Mistral was 0 last run and 0 now -> not a regression. OpenAI stays >=1.
+    prev = so._snapshot(
+        [_model("Mistral Small 4", "Mistral", 0.10, None, 0.30, "fallback"),
+         _model("GPT-4o", "OpenAI", 2.5, 1.25, 10.0, "official")],
+        "2026-08-01T09:00:00Z",
+    )
+    now = [
+        _model("Mistral Small 4", "Mistral", 0.10, None, 0.30, "fallback"),
+        _model("GPT-4o", "OpenAI", 2.5, 1.25, 10.0, "official"),
+    ]
+    assert so._coverage_regressions(prev, now) == []
+    # No previous snapshot -> nothing to compare.
+    assert so._coverage_regressions(None, now) == []
+
+
 def _run_standalone():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     passed = 0
