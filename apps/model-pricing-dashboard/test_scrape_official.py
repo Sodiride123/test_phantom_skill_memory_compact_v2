@@ -39,12 +39,26 @@ def test_anthropic_main_table_only():
     assert rows["claudeopus48"]["output"] == 25.0
 
 
-def test_xai_standard_tier():
-    text = "grok-4.5\t500k\t$2.00\t$0.50\t$6.00\t$4.00\t$1.00\t$12.00"
+def test_xai_multiline_short_tier():
+    # docs.x.ai (2026-08 layout): id line, an optional 'Long context' note,
+    # then a tab-led price row with SHORT then LONG context tiers. We take the
+    # short tier (first three $ values) — see issue #111.
+    text = "\n".join([
+        "Model\tContext\tShort context\tLong context",
+        "Input\tCached\tOutput\tInput\tCached\tOutput",
+        "grok-4.5",
+        "Long context ≥ 200k tokens",
+        "\t500k\t$2.00\t$0.30\t$6.00\t$4.00\t$0.60\t$12.00",
+        "grok-4.20-0309-reasoning",
+        "Long context ≥ 200k tokens",
+        "\t1M\t$1.25\t$0.20\t$2.50\t$2.50\t$0.40\t$5.00",
+    ])
     rows = so.parse_xai(text)
     assert rows["grok45"] == {
-        "name": "grok-4.5", "input": 2.0, "cached": 0.5, "output": 6.0, "context": 500000,
+        "name": "grok-4.5", "input": 2.0, "cached": 0.3, "output": 6.0, "context": 500000,
     }
+    # Variant/dated ids parse fine but won't strict-match a dataset name.
+    assert rows[so.norm("grok-4.20-0309-reasoning")]["input"] == 1.25
 
 
 def test_deepseek_transposed_with_rowspan_label():

@@ -250,21 +250,49 @@ def parse_anthropic(text: str):
     return rows
 
 
+_XAI_ID = re.compile(r"^grok[\w.\-]*$", re.I)
+
+
 def parse_xai(text: str):
-    """Rows: 'grok-x<tab>context<tab>$in<tab>$cache<tab>$out<tab>…higher tier'.
-    Take standard tier: input, cached, output (cells 2,3,4). The Context column
-    (cell 1, e.g. '256k'/'1M') gives the context window."""
+    """xAI Text API pricing table (docs.x.ai/developers/pricing).
+
+    Layout as of 2026-08 — each model spans MULTIPLE lines (the old single-row
+    'grok-x<tab>ctx<tab>prices' layout is gone, which is why the flat parser
+    returned 0 rows, see issue #111):
+
+        grok-4.5
+        Long context ≥ 200k tokens          # optional note line
+        \\t500k\\t$2.00\\t$0.30\\t$6.00\\t$4.00\\t$0.60\\t$12.00
+
+    The price row is tab-led (empty first cell), then a Context cell, then the
+    SHORT-context tier (input, cached, output) followed by the long-context
+    tier. We take the short/standard tier — the first three dollar values — and
+    the context cell for the window. Matching downstream is strict exact-norm,
+    so only models whose id equals a dataset name (e.g. grok-4.5) are confirmed;
+    dated/variant ids (grok-4.20-0309-reasoning, grok-build-0.1, …) simply don't
+    match and keep their existing provenance."""
     rows = {}
+    pending = None
     for line in text.splitlines():
+        s = line.strip()
+        if _XAI_ID.match(s):
+            pending = s
+            continue
+        if pending is None:
+            continue
         cells = [c.strip() for c in line.split("\t")]
-        if len(cells) >= 5 and cells[0].lower().startswith("grok") and MONEY.search(cells[2]):
-            rows[norm(cells[0])] = {
-                "name": cells[0],
-                "input": _money(cells[2]),
-                "cached": _money(cells[3]),
-                "output": _money(cells[4]),
-                "context": _context(cells[1]),
+        monies = MONEY.findall(line)
+        # A price row: leading empty (tab) cell + >=3 dollar values.
+        if cells and cells[0] == "" and len(monies) >= 3:
+            ctx_cell = cells[1] if len(cells) > 1 else ""
+            rows[norm(pending)] = {
+                "name": pending,
+                "input": float(monies[0].replace(",", "")),
+                "cached": float(monies[1].replace(",", "")),
+                "output": float(monies[2].replace(",", "")),
+                "context": _context(ctx_cell),
             }
+            pending = None
     return rows
 
 
