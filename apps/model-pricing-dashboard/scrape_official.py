@@ -96,6 +96,31 @@ def _money(cell: str):
 # regression or a page-layout change silently producing a wrong number.
 DRIFT_THRESHOLD = 0.25  # 25%
 
+# Explicit dataset-name -> page-id aliases for models whose display name in our
+# catalog no longer equals the live id on the provider's pricing page (the page
+# moved to a newer generation / dated ids). ONLY alias when we are confident the
+# page id IS the current version of that catalog model — a capability-neutral
+# reprice (price + context + provenance are all taken from the page id). This is
+# the same confidence bar as exact matching; anything we're unsure about keeps
+# its existing provenance instead of being aliased. (Issue #113.)
+PAGE_ID_ALIASES = {
+    "xAI": {
+        "grok4": "grok-4.3",                    # Grok 4 -> grok-4.3 (4.x successor)
+        "grok420": "grok-4.20-0309-reasoning",  # Grok 4.20 -> reasoning variant
+    },
+}
+
+
+def _resolve_page_id(rows, provider, catalog_name):
+    """Find the scraped row for a catalog model name: strict exact-norm first,
+    then the explicit per-provider alias map. Returns the matched row dict or
+    None."""
+    if not rows:
+        return None
+    alias = PAGE_ID_ALIASES.get(provider, {}).get(norm(catalog_name), "")
+    # rows are keyed by norm(page_id), so normalize the alias target too.
+    return rows.get(norm(catalog_name)) or rows.get(norm(alias))
+
 
 def _drift_pct(old, new):
     """Relative change |new-old|/|old| as a fraction, or None when it can't be
@@ -653,7 +678,7 @@ def overlay(dry_run=False, validate=True):
     for m in dataset["models"]:
         prov = m["provider"]
         rows = official.get(prov, {})
-        hit = rows.get(norm(m["name"]))
+        hit = _resolve_page_id(rows, prov, m["name"])
         stats = per_provider.setdefault(prov, {"matched": 0, "catalog": 0})
         stats["catalog"] += 1
         if hit and hit.get("input") is not None:
@@ -680,8 +705,13 @@ def overlay(dry_run=False, validate=True):
             total_matched += 1
             confirmed_names.append(f"{prov}/{m['name']}")
 
-        # Capability upgrade — context window from the official pages.
-        cwin = ctx_map.get(prov, {}).get(norm(m["name"]))
+        # Capability upgrade — context window from the official pages. Resolve
+        # the same way as price (exact-norm, then alias) so aliased models get
+        # their page-id's context too.
+        ctx_rows = ctx_map.get(prov, {})
+        alias = PAGE_ID_ALIASES.get(prov, {}).get(norm(m["name"]), "")
+        ctx_key = norm(m["name"]) if norm(m["name"]) in ctx_rows else norm(alias)
+        cwin = ctx_rows.get(ctx_key) if ctx_key else None
         if cwin:
             old = m.get("context_window")
             m["context_window"] = cwin

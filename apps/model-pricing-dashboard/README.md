@@ -244,14 +244,25 @@ plain-HTTP `Tavily extract()` returns marketing/nav copy rather than the live
 token-price tables. **Rendering them in the browser skill solves this** for five
 of the six providers (see the `official` table above). The remaining gap:
 
-- **Mistral** — `mistral.ai/pricing` lists only consumer **subscription plans**
-  ($14.99/$24.99/mo etc.), not API token prices, even after rendering. Mistral
-  rows therefore stay on the aggregator/fallback. `docs.mistral.ai` model pages
-  render an API-loaded table that did not expose per-token prices in text.
-- A few individual models (e.g. some older OpenAI GPT-4-class models, `Grok 4.20`
-  variants, `Gemini 3 Pro`, `Claude Sonnet 5`) are not listed under an exact
-  matching name on the current official page, so they keep their aggregator/
-  fallback price rather than risk a wrong-variant match.
+- **Mistral** — no scrapable API-token price source exists (re-probed
+  2026-08-07, issue #113): `mistral.ai/pricing` renders only consumer
+  **subscription plans** ($5.99/$14.99/$24.99 mo) — its "API pricing" section
+  links out to product cards, no per-token table; `docs.mistral.ai/…/models_overview/`
+  is capability prose with no prices; `mistral.ai/products/la-plateforme` is
+  marketing; `console.mistral.ai` (the billing portal that does hold per-token
+  rates) requires a login and 502s unauthenticated. Mistral rows therefore stay
+  on the aggregator/fallback. If Mistral ever publishes a public per-token page,
+  drop a parser into `scrape_official.py`.
+- **xAI** — the page moved to a newer generation (2026-08): `grok-4.5`,
+  `grok-4.3`, `grok-build-0.1`, and dated `grok-4.20-…` ids. Older catalog names
+  (`Grok 3 / 3 Mini / 2 Vision / Beta / 4.1 Fast`) are retired/renamed and keep
+  fallback prices. `Grok 4` and `Grok 4.20` are mapped to their current page ids
+  (`grok-4.3`, `grok-4.20-0309-reasoning`) via an explicit, capability-neutral
+  `PAGE_ID_ALIASES` entry in `scrape_official.py`, so they price `official`.
+- A few individual models (e.g. some older OpenAI GPT-4-class models,
+  `Gemini 3 Pro`, `Claude Sonnet 5`) are not listed under an exact matching name
+  on the current official page, so they keep their aggregator/fallback price
+  rather than risk a wrong-variant match.
 
 No API keys or paid logins were used — **public sources only**.
 

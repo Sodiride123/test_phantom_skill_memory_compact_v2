@@ -61,6 +61,25 @@ def test_xai_multiline_short_tier():
     assert rows[so.norm("grok-4.20-0309-reasoning")]["input"] == 1.25
 
 
+def test_xai_page_id_alias():
+    # The page moved to dated/newer ids; an explicit alias maps our catalog name
+    # to the page id (capability-neutral reprice). See issue #113.
+    rows = {
+        so.norm("grok-4.3"): {"name": "grok-4.3", "input": 1.25, "cached": 0.20, "output": 2.50, "context": 1000000},
+        so.norm("grok-4.20-0309-reasoning"): {"name": "grok-4.20-0309-reasoning", "input": 1.25, "cached": 0.20, "output": 2.50, "context": 1000000},
+    }
+    # 'Grok 4' aliases to grok-4.3; 'Grok 4.20' to the reasoning variant.
+    assert so._resolve_page_id(rows, "xAI", "Grok 4") is rows[so.norm("grok-4.3")]
+    assert so._resolve_page_id(rows, "xAI", "Grok 4.20") is rows[so.norm("grok-4.20-0309-reasoning")]
+    # Exact-norm still wins when present; unknown name returns None.
+    rows_exact = {"grok45": {"name": "grok-4.5", "input": 2.0}}
+    assert so._resolve_page_id(rows_exact, "xAI", "Grok 4.5") is rows_exact["grok45"]
+    assert so._resolve_page_id(rows, "xAI", "Grok 2 Vision") is None
+    assert so._resolve_page_id(None, "xAI", "Grok 4") is None
+    # Aliases are per-provider — the xAI alias must not leak to other providers.
+    assert so._resolve_page_id(rows, "OpenAI", "Grok 4") is None
+
+
 def test_deepseek_transposed_with_rowspan_label():
     text = "\n".join([
         "MODEL\tdeepseek-v4-flash(1)\tdeepseek-v4-pro",

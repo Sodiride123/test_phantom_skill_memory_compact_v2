@@ -1,6 +1,6 @@
 {
-  "last_collected": "2026-08-07T06:07:38Z",
-  "generated_at": "2026-08-07T06:07:38.075626+00:00",
+  "last_collected": "2026-08-07T06:34:00Z",
+  "generated_at": "2026-08-07T06:34:00.800848+00:00",
   "currency": "USD",
   "price_unit": "per 1,000,000 tokens",
   "provider_count": 6,
@@ -746,11 +746,11 @@
       "provider": "xAI",
       "name": "Grok 4.20",
       "family": "Grok 4.20",
-      "input_price": 2.0,
+      "input_price": 1.25,
       "cached_price": 0.2,
-      "output_price": 6.0,
+      "output_price": 2.5,
       "price_unit": "USD per 1M tokens",
-      "context_window": 2000000,
+      "context_window": 1000000,
       "modalities": [
         "text",
         "vision"
@@ -761,15 +761,16 @@
         "long-context"
       ],
       "provenance": {
-        "input_price": "fallback",
-        "cached_price": "fallback",
-        "output_price": "fallback",
-        "context_window": "fallback",
+        "input_price": "official",
+        "cached_price": "official",
+        "output_price": "official",
+        "context_window": "official",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": true
+      "price_stale": false,
+      "official_source": "https://docs.x.ai/developers/pricing"
     },
     {
       "provider": "xAI",
@@ -805,11 +806,11 @@
       "provider": "xAI",
       "name": "Grok 4",
       "family": "Grok 4",
-      "input_price": 3.0,
-      "cached_price": 0.75,
-      "output_price": 15.0,
+      "input_price": 1.25,
+      "cached_price": 0.2,
+      "output_price": 2.5,
       "price_unit": "USD per 1M tokens",
-      "context_window": 256000,
+      "context_window": 1000000,
       "modalities": [
         "text",
         "vision"
@@ -820,15 +821,16 @@
         "coding"
       ],
       "provenance": {
-        "input_price": "fallback",
-        "cached_price": "fallback",
-        "output_price": "fallback",
-        "context_window": "fallback",
+        "input_price": "official",
+        "cached_price": "official",
+        "output_price": "official",
+        "context_window": "official",
         "modalities": "fallback",
         "release_date": "fallback",
         "tags": "fallback"
       },
-      "price_stale": true
+      "price_stale": false,
+      "official_source": "https://docs.x.ai/developers/pricing"
     },
     {
       "provider": "xAI",
@@ -1255,7 +1257,7 @@
       "Anthropic": "https://docs.claude.com/en/docs/about-claude/models/overview",
       "Google": "https://ai.google.dev/gemini-api/docs/models"
     },
-    "matched": 18,
+    "matched": 20,
     "by_provider": {
       "OpenAI": {
         "matched": 9,
@@ -1270,7 +1272,7 @@
         "catalog": 5
       },
       "xAI": {
-        "matched": 1,
+        "matched": 3,
         "catalog": 8
       },
       "Mistral": {
@@ -1298,16 +1300,70 @@
       "Google/Gemini 2.5 Flash",
       "Google/Gemini 2.5 Pro",
       "Google/Gemini 3.5 Flash",
+      "xAI/Grok 4.20",
       "xAI/Grok 4.5",
+      "xAI/Grok 4",
       "DeepSeek/DeepSeek V4 Flash",
       "DeepSeek/DeepSeek V4 Pro"
     ],
-    "context_upgrades": [],
+    "context_upgrades": [
+      {
+        "model": "xAI/Grok 4.20",
+        "from": 2000000,
+        "to": 1000000
+      },
+      {
+        "model": "xAI/Grok 4",
+        "from": 256000,
+        "to": 1000000
+      }
+    ],
     "drift_threshold_pct": 25.0,
-    "drift": [],
+    "drift": [
+      {
+        "model": "xAI/Grok 4.20",
+        "field": "input_price",
+        "from": 2.0,
+        "to": 1.25,
+        "pct": 37.5,
+        "prev_provenance": "fallback"
+      },
+      {
+        "model": "xAI/Grok 4.20",
+        "field": "output_price",
+        "from": 6.0,
+        "to": 2.5,
+        "pct": 58.3,
+        "prev_provenance": "fallback"
+      },
+      {
+        "model": "xAI/Grok 4",
+        "field": "input_price",
+        "from": 3.0,
+        "to": 1.25,
+        "pct": 58.3,
+        "prev_provenance": "fallback"
+      },
+      {
+        "model": "xAI/Grok 4",
+        "field": "cached_price",
+        "from": 0.75,
+        "to": 0.2,
+        "pct": 73.3,
+        "prev_provenance": "fallback"
+      },
+      {
+        "model": "xAI/Grok 4",
+        "field": "output_price",
+        "from": 15.0,
+        "to": 2.5,
+        "pct": 83.3,
+        "prev_provenance": "fallback"
+      }
+    ],
     "drift_vs_previous_run": [],
     "coverage_regressions": [],
-    "history_compared_to": "2026-08-07T05:58:46Z",
+    "history_compared_to": "2026-08-07T06:07:38Z",
     "not_scraped": {
       "Mistral": "mistral.ai/pricing lists subscription plans only, not API token prices \u2014 kept on aggregator/fallback"
     }
