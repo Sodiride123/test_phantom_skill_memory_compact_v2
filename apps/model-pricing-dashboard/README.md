@@ -58,6 +58,22 @@ data itself is served from the local `data/models.json`.)
 `preview.py` first runs `validate_dataset.py` and prints a one-line PASS/FAIL
 summary, so a malformed dataset is caught before you look at the render.
 
+## Theming (light / dark)
+
+The dashboard defaults to a **dark** theme. Click the **☀️ Light / 🌙 Dark**
+toggle in the header (top-right) to switch; the choice is saved in
+`localStorage` (`mpd-theme`) and reapplied on the next visit — pre-paint, via a
+tiny inline script in `index.html`, so there is no flash of the wrong theme.
+With no saved choice, the OS `prefers-color-scheme` setting is used.
+
+The whole UI is driven by CSS custom properties (`:root` = dark,
+`html[data-theme="light"]` = light in `styles.css`). Canvas charts can't be
+restyled by CSS, so `themeChartColors()` in `app.js` mirrors the palette and
+both charts are redrawn on toggle. `test_theme.js` pins both palettes (and the
+fallback for unknown theme names); `verify_theme.py` does a live end-to-end
+check of the toggle (flip, persistence across reload, light screenshot) against
+a locally served instance.
+
 ## Validate the data
 
 `validate_dataset.py` checks the assembled `data/models.json` against the
@@ -284,7 +300,7 @@ No API keys or paid logins were used — **public sources only**.
 | File | Purpose |
 |------|---------|
 | `index.html` | Dashboard markup |
-| `styles.css` | Styling (dark theme) |
+| `styles.css` | Styling — CSS-var palette, dark default + light theme (#131) |
 | `app.js` | Table, filters, charts, best-value logic |
 | `build_dataset.py` | Model catalog + normalizer — generates `data/models.json` |
 | `scrape_pricing.py` | Aggregator pricing refresh — scrapes aipricing.guru, regenerates dataset |
