@@ -88,9 +88,8 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from functools import cache, wraps
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 import requests
@@ -104,7 +103,7 @@ from constants import (
     MONITOR_SERVICE_NAME,
     SLACK_USER_ID_NAME_FEATURE_FLAG,
 )
-from core.config import load_agent_config, save_agent_messages
+from core.config import refresh_config, save_agent_messages
 from core.logging import get_logger
 from messaging.base import MessagingInterface
 from messaging.message_utils import (
@@ -114,6 +113,7 @@ from messaging.message_utils import (
     resolve_reply_thread,
 )
 from messaging.slack.slack_md_blocks import md_to_slack_blocks
+from messaging.slack.token import resolve_slack_token
 from messaging.slack.utils import (
     USER_CACHE_TTL_SECONDS,
     collect_unresolved_user_ids,
@@ -431,144 +431,66 @@ def parse_mcp_tokens(filepath: str = "/dev/shm/mcp-token") -> Dict[str, Any]:
         return {}
 
 
-def get_slack_tokens(
-    filepath: str = "/dev/shm/mcp-token", config_file=AGENT_SETTINGS_PATH
-) -> SlackTokens:
-    """
-    Extract Slack bot token from cached config, MCP token file, or environment.
+def _resolve_workspace_identity(
+    bot_token: str, config: SlackConfig, config_file=AGENT_SETTINGS_PATH
+) -> None:
+    """Resolve workspace identity (team_id, team_name, team_domain) and save to config."""
+    if config.default_team_id:
+        return
 
-    ONLY bot tokens (xoxb-*) are supported. If a user token (xoxp-*) is
-    provided without a bot token, an error is raised.
+    workspace_resolved = False
+    if config.default_channel_id:
+        try:
+            cache_client = AgentEventCacheClient()
+            ws = cache_client.get_workspace(config.default_channel_id)
+            config.workspace = ws.name
+            if not config.default_team_id:
+                config.default_team_id = ws.workspace_id
+            config.default_team_name = ws.name
+            config.default_team_domain = ws.domain
+            workspace_resolved = True
+        except Exception:
+            pass
+
+    if not workspace_resolved:
+        try:
+            response = requests.post(
+                "https://slack.com/api/auth.test",
+                headers={"Authorization": f"Bearer {bot_token}"},
+                timeout=10,
+            ).json()
+            if response.get("ok"):
+                config.workspace = response.get("team")
+                if not config.default_team_id:
+                    config.default_team_id = response.get("team_id")
+                config.default_team_name = response.get("team")
+                url = response.get("url") or ""
+                if url:
+                    host = urlparse(url).hostname or ""
+                    config.default_team_domain = host.split(".", 1)[0] if host else None
+        except Exception:
+            pass
+
+    config.save(config_file, quiet=True)
+
+
+def get_slack_tokens(config_file=AGENT_SETTINGS_PATH) -> SlackTokens:
+    """Extract Slack bot token via 3-tier resolver.
 
     Token sources (in priority order):
-        1. Cached bot token in config file (~/.agent_settings.json)
-        2. MCP token file (/dev/shm/mcp-token) - auto-populated by Connect button
-        3. Environment variables: SLACK_BOT_TOKEN or SLACK_MCP_XOXB_TOKEN
+        1. Cached config (~/.agent_settings.json)
+        2. /dev/shm/mcp-token
+        3. Token proxy (agent-event-cache /tokens?provider_id=Slack)
 
-    Args:
-        filepath: Path to MCP token file
-        config_file: Path to config file for caching tokens
-
-    Returns:
-        SlackTokens instance with bot token
-
-    Raises:
-        SystemExit: If only a user token (xoxp-*) is found with no bot token
+    On first token discovery, resolves workspace identity and caches to config.
     """
     tokens = SlackTokens()
-    config = SlackConfig.load(config_file)
+    tokens.bot_token = resolve_slack_token()
 
-    # 1. Try to get from cached config first
-    if config.has_tokens():
-        tokens.bot_token = config.bot_token
-
-    # 2. Try to get from MCP token file (and update cache if found)
-    if not tokens.bot_token:
-        all_tokens = parse_mcp_tokens(filepath)
-        slack_data = all_tokens.get("Slack", {})
-
-        # Read workspace ID from mcp-token if not already set in config.
-        # SLACK_WORKSPACE_ID takes precedence over auth.test resolution but
-        # not over a value already persisted by install.sh --workspace-id.
-        workspace_id_from_token = all_tokens.get("SLACK_WORKSPACE_ID")
-        if workspace_id_from_token and not config.default_team_id:
-            config.default_team_id = workspace_id_from_token
-
-        if isinstance(slack_data, dict):
-            tokens.bot_token = slack_data.get("bot_token")
-            user_token = slack_data.get("access_token")
-
-            # Reject user-only token
-            if not tokens.bot_token and user_token:
-                print(
-                    "❌ ERROR: Only a user token (xoxp-*) was found.", file=sys.stderr
-                )
-                print(
-                    "   This interface requires a bot token (xoxb-*).", file=sys.stderr
-                )
-                print(
-                    "   Please configure a bot token in your Slack app.",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
-
-            # Cache bot token to config file for future use
-            if tokens.bot_token:
-                config.bot_token = tokens.bot_token
-
-                # Resolve full workspace identity via agent-event-cache or auth.test.
-                # We capture team_id (+ team_domain) so downstream
-                # integrations (e.g. Pipedream, whose external_user_id
-                # is "<team_id>.<channel_id>") can read a single
-                # canonical source of truth.
-                workspace_resolved = False
-                if config.default_channel_id:
-                    try:
-                        cache_client = AgentEventCacheClient()
-                        print(
-                            f"[slack-cache] GET /db/workspace?channel_id={config.default_channel_id} via agent-event-cache",
-                            flush=True,
-                        )
-                        ws = cache_client.get_workspace(config.default_channel_id)
-                        config.workspace = ws.name
-                        if not config.default_team_id:
-                            config.default_team_id = ws.workspace_id
-                        config.default_team_name = ws.name
-                        config.default_team_domain = ws.domain
-                        workspace_resolved = True
-                    except Exception:
-                        pass  # Fall through to auth.test
-
-                # Fallback resolution through auth.test if agent-event-cache fails or is unavailable
-                if not workspace_resolved:
-                    try:
-                        response = requests.post(
-                            "https://slack.com/api/auth.test",
-                            headers={"Authorization": f"Bearer {tokens.bot_token}"},
-                            timeout=10,
-                        ).json()
-                        if response.get("ok"):
-                            config.workspace = response.get("team")
-                            # Only overwrite team_id if not already set from
-                            # mcp-token SLACK_WORKSPACE_ID or install.sh --workspace-id.
-                            if not config.default_team_id:
-                                config.default_team_id = response.get("team_id")
-                            config.default_team_name = response.get("team")
-                            # Slack returns url like "https://renovateai-hq.slack.com/";
-                            # the leading subdomain is the team_domain.
-                            url = response.get("url") or ""
-                            if url:
-                                host = urlparse(url).hostname or ""
-                                config.default_team_domain = (
-                                    host.split(".", 1)[0] if host else None
-                                )
-                    except Exception:
-                        pass  # Ignore errors when getting workspace name
-
-                config.save(config_file, quiet=True)
-                print(f"🔐 Slack bot token cached to {config_file}")
-
-    # 3. Fall back to environment variables
-    if not tokens.bot_token:
-        tokens.bot_token = os.environ.get("SLACK_BOT_TOKEN") or os.environ.get(
-            "SLACK_MCP_XOXB_TOKEN"
-        )
-
-        # Check if user token was given via env var (reject it)
-        if not tokens.bot_token:
-            user_env = os.environ.get("SLACK_TOKEN") or os.environ.get(
-                "SLACK_MCP_XOXP_TOKEN"
-            )
-            if user_env:
-                print(
-                    "❌ ERROR: Only a user token (xoxp-*) was found in environment.",
-                    file=sys.stderr,
-                )
-                print(
-                    "   This interface requires a bot token (xoxb-*).", file=sys.stderr
-                )
-                print("   Set SLACK_BOT_TOKEN instead of SLACK_TOKEN.", file=sys.stderr)
-                sys.exit(1)
+    if tokens.bot_token:
+        config = SlackConfig.load(config_file)
+        config.bot_token = tokens.bot_token
+        _resolve_workspace_identity(tokens.bot_token, config, config_file)
 
     return tokens
 
@@ -645,93 +567,18 @@ class SlackClient:
         }
 
     def _refresh_token(self, old_token: str) -> Optional[str]:
-        """
-        Attempt to refresh bot token from /dev/shm/mcp-token when current token is expired.
-
-        This method:
-        1. Re-reads bot token from /dev/shm/mcp-token
-        2. Updates the cached config file with new token
-        3. Updates self.tokens with new value
-        4. Returns the new bot token
-
-        Args:
-            old_token: The expired token that needs refreshing
-
-        Returns:
-            New bot token if refresh successful, None otherwise
-        """
+        """Attempt to refresh bot token via the 3-tier resolver."""
         try:
-            # Re-read tokens from MCP token file
-            all_tokens = parse_mcp_tokens("/dev/shm/mcp-token")
-            slack_data = all_tokens.get("Slack", {})
-
-            if not isinstance(slack_data, dict):
+            refresh_config("agent_config")
+            new_tokens = get_slack_tokens()
+            new_bot = new_tokens.bot_token
+            if not new_bot or new_bot == old_token:
                 return None
-
-            new_bot_token = slack_data.get("bot_token")
-
-            if not new_bot_token:
-                return None
-
-            # Update self.tokens
-            self.tokens.bot_token = new_bot_token
-
-            # Update cached config file
-            config = SlackConfig.load(AGENT_SETTINGS_PATH)
-            config.bot_token = new_bot_token
-
-            # Re-resolve identity if the config was missing team_id or
-            # was populated before this field existed. This keeps the
-            # Pipedream Connect x-ninja-integration-channel-id value stable across sandbox
-            # restarts and token rotations.
-            if not config.default_team_id:
-                workspace_resolved = False
-                if config.default_channel_id:
-                    try:
-                        cache_client = AgentEventCacheClient()
-                        print(
-                            f"[slack-cache] GET /db/workspace?channel_id={config.default_channel_id} via agent-event-cache",
-                            flush=True,
-                        )
-                        ws = cache_client.get_workspace(config.default_channel_id)
-                        config.workspace = config.workspace or ws.name
-                        config.default_team_id = ws.workspace_id
-                        config.default_team_name = ws.name
-                        config.default_team_domain = ws.domain
-                        workspace_resolved = True
-                    except Exception:
-                        pass  # Fall through to auth.test
-
-                if not workspace_resolved:
-                    try:
-                        response = requests.post(
-                            "https://slack.com/api/auth.test",
-                            headers={"Authorization": f"Bearer {new_bot_token}"},
-                            timeout=10,
-                        ).json()
-                        if response.get("ok"):
-                            config.workspace = config.workspace or response.get("team")
-                            config.default_team_id = response.get("team_id")
-                            config.default_team_name = response.get("team")
-                            url = response.get("url") or ""
-                            if url:
-                                host = urlparse(url).hostname or ""
-                                config.default_team_domain = (
-                                    host.split(".", 1)[0] if host else None
-                                )
-                    except Exception:
-                        pass  # Best-effort identity refresh — never block token refresh on it.
-
-            config.save(AGENT_SETTINGS_PATH, quiet=True)
-            print(
-                f"🔄 Slack bot token refreshed and cached to {AGENT_SETTINGS_PATH}",
-                file=sys.stderr,
-            )
-
-            return new_bot_token
-
+            self.tokens = new_tokens
+            print("🔄 Slack bot token refreshed and cached")
+            return new_bot
         except Exception as e:
-            print(f"[Token Refresh Error] {str(e)}", file=sys.stderr)
+            print(f"[Token Refresh Error] {e}", file=sys.stderr)
             return None
 
     def _api_call(
@@ -2581,12 +2428,6 @@ For more info: https://github.com/NinjaTech-AI/agent-team-logo-creator
         """,
     )
     parser.add_argument(
-        "-T",
-        "--token-file",
-        default="/dev/shm/mcp-token",
-        help="Path to MCP token file (default: /dev/shm/mcp-token)",
-    )
-    parser.add_argument(
         "-C",
         "--config-file",
         default=AGENT_SETTINGS_PATH,
@@ -2718,7 +2559,7 @@ For more info: https://github.com/NinjaTech-AI/agent-team-logo-creator
         return
 
     # Load tokens
-    tokens = get_slack_tokens(args.token_file)
+    tokens = get_slack_tokens()
 
     if not tokens.bot_token:
         print("=" * 70, file=sys.stderr)
@@ -2747,7 +2588,7 @@ For more info: https://github.com/NinjaTech-AI/agent-team-logo-creator
         print("=" * 70, file=sys.stderr)
         print(file=sys.stderr)
         print("🔍 Technical Details:", file=sys.stderr)
-        print(f"   • Token file checked: {args.token_file}", file=sys.stderr)
+        print(f"   • Token file checked: /dev/shm/mcp-token", file=sys.stderr)
         print(f"   • Environment variables checked:", file=sys.stderr)
         print(f"     - SLACK_BOT_TOKEN", file=sys.stderr)
         print(f"     - SLACK_MCP_XOXB_TOKEN", file=sys.stderr)
@@ -2847,17 +2688,15 @@ class SlackInterface(MessagingInterface):
 
     def __init__(
         self,
-        token_file: str = "/dev/shm/mcp-token",
         config_file: str = AGENT_SETTINGS_PATH,
     ):
         """
         Initialize Slack Interface with tokens and config.
 
         Args:
-            token_file: Path to MCP token file (default: /dev/shm/mcp-token)
             config_file: Path to config file (default: ~/.agent_settings.json)
         """
-        self.tokens = get_slack_tokens(token_file)
+        self.tokens = get_slack_tokens()
         self.config = SlackConfig.load(config_file)
         self.client = SlackClient(self.tokens)
         self._token = self.tokens.bot_token
@@ -3647,27 +3486,24 @@ class SlackInterface(MessagingInterface):
             return False
 
     def check_messaging_health(self) -> Dict:
-        """Validate Slack bot token credentials via auth.test.
+        """Validate Slack bot token via auth.test, rotating if invalid.
 
-        Reads the bot token from /dev/shm/mcp-token (same source as
-        get_slack_tokens). Returns a status dict compatible with the
-        health_service check pattern. Never raises.
+        If the current token fails auth.test, triggers the 3-tier resolver
+        to obtain a fresh token and retries.
 
         Returns:
             {"service": "slack", "status": "ok", "team": "..."}  on success
             {"service": "slack", "status": "missing", "message": "..."}  if no token
-            {"service": "slack", "status": "invalid", "message": "..."}  if auth fails
+            {"service": "slack", "status": "invalid", "message": "..."}  if auth fails after rotation
             {"service": "slack", "status": "error",   "message": "..."}  on exception
         """
         try:
-            tokens = parse_mcp_tokens("/dev/shm/mcp-token")
-            slack_data = tokens.get("Slack", {})
-            bot_token = (
-                slack_data.get("bot_token") if isinstance(slack_data, dict) else None
-            )
-            # Fall back to cached token from config
-            if not bot_token and self.tokens:
-                bot_token = self.tokens.bot_token
+            bot_token = self.tokens.bot_token if self.tokens else None
+            if not bot_token:
+                # No cached token — try the resolver
+                bot_token = resolve_slack_token()
+                if bot_token and self.tokens:
+                    self.tokens.bot_token = bot_token
 
             if not bot_token:
                 return {
@@ -3683,6 +3519,20 @@ class SlackInterface(MessagingInterface):
                     "status": "ok",
                     "team": info.get("team", ""),
                 }
+
+            # Token invalid — try rotation via 3-tier resolver
+            refresh_config("agent_config")
+            new_token = resolve_slack_token()
+            if new_token and new_token != bot_token:
+                self.tokens.bot_token = new_token
+                info = self.client.test_auth(new_token)
+                if info.get("ok"):
+                    return {
+                        "service": "slack",
+                        "status": "ok",
+                        "team": info.get("team", ""),
+                    }
+
             return {
                 "service": "slack",
                 "status": "invalid",

@@ -34,6 +34,7 @@ from pathlib import Path
 
 from agents_config import AGENTS
 from clients.posthog_client import capture, is_feature_enabled
+from clients.token_resolver import resolve_github_token
 from constants import MONITOR_SERVICE_NAME, WELCOME_FEATURE_FLAG
 from core.config import (
     install_sighup_handler,
@@ -53,7 +54,6 @@ from processes.orchestrator import (
     ORCHESTRATOR_SERVICE,
     count_open_issues,
     is_orchestrator_running,
-    login_github_cli,
 )
 from services.cron_service import claim_cron, get_due_cron_messages
 from services.monitor_service import (
@@ -61,7 +61,6 @@ from services.monitor_service import (
     build_welcome_signature,
     run_batched_response,
 )
-from tools.token_health import check_github_token
 from utils.cost import check_cost_limit
 
 logger = get_logger(MONITOR_SERVICE_NAME)
@@ -116,7 +115,7 @@ class RateLimitHandler:
                 self.current_backoff * BACKOFF_MULTIPLIER, BACKOFF_MAX
             )
         print(
-            f"\u26a0\ufe0f Rate limited! Backing off for {self.current_backoff}s "
+            f"⚠️ Rate limited! Backing off for {self.current_backoff}s "
             f"(attempt #{self.consecutive_rate_limits})",
             flush=True,
         )
@@ -125,7 +124,7 @@ class RateLimitHandler:
     def on_success(self):
         if self.consecutive_rate_limits > 0:
             print(
-                f"\u2705 Rate limit cleared after {self.consecutive_rate_limits} retries",
+                f"✅ Rate limit cleared after {self.consecutive_rate_limits} retries",
                 flush=True,
             )
         self.current_backoff = 0
@@ -164,42 +163,32 @@ def write_monitor_heartbeat() -> None:
 
 
 def maybe_sync_github_token(last_sync_check: float) -> float:
-    """Re-sync a rotated mcp-token into gh's hosts.yml when the session is stale.
+    """Periodically resolve the GitHub token via the 3-tier flow.
 
-    health_service.py only observes and reports; this is the remediation half.
-    Runs at most every GH_TOKEN_SYNC_INTERVAL seconds. When check_github_token()
-    reports "invalid" (hosts.yml token dead but mcp-token holds one), re-runs
-    the orchestrator's login_github_cli() to refresh the gh session.
+    Runs at most every GH_TOKEN_SYNC_INTERVAL seconds. Uses
+    ``resolve_github_token()`` which checks the cached gh session first,
+    then /dev/shm/mcp-token, then the token proxy — propagating up on
+    success.
 
     Skipped entirely for the local channel (canary) — no git repo / mcp-token.
-
     Returns the timestamp of this check (or last_sync_check if skipped).
-    Best-effort — never raises.
     """
     now = time.time()
     if now - last_sync_check < GH_TOKEN_SYNC_INTERVAL:
         return last_sync_check
 
-    # Local channel (canary) has no git repo or mcp-token — skip entirely.
     if resolve_messaging_channel() == "local":
         return now
 
     try:
-        result = check_github_token()
-        if result.get("status") == "invalid":
-            print(
-                "\U0001f504 gh session stale after mcp-token rotation \u2014 re-syncing...",
-                flush=True,
-            )
-            if login_github_cli(logging.getLogger(__name__)):
-                print("\u2705 gh session recovered from rotated mcp-token", flush=True)
-            else:
-                print(
-                    "\u26a0\ufe0f gh re-login failed; will retry next interval",
-                    flush=True,
-                )
+        result = resolve_github_token()
+        if result["status"] == "ok":
+            print("✅ gh session valid", flush=True)
+        else:
+            msg = result.get("message", result["status"])
+            print(f"⚠️ GitHub token sync failed — {msg}", flush=True)
     except Exception as e:
-        print(f"\u26a0\ufe0f GitHub token sync check failed: {e}", file=sys.stderr)
+        print(f"⚠️ GitHub token sync failed: {e}", file=sys.stderr)
 
     return now
 
@@ -241,7 +230,7 @@ def maybe_launch_orchestrator() -> bool:
         )
         return False
     except (OSError, subprocess.SubprocessError) as e:
-        logger.error(f"\u26a0\ufe0f Could not launch {ORCHESTRATOR_SERVICE}: {e}")
+        logger.error(f"⚠️ Could not launch {ORCHESTRATOR_SERVICE}: {e}")
         return False
 
 
@@ -309,7 +298,7 @@ class PollingMonitorStrategy(MonitorStrategy):
         logger.info(f"Resolved agent_id: {agent_id} (from args or config)")
 
         if not agent_id or agent_id not in AGENTS:
-            print("\u274c No valid agent configured!", file=sys.stderr)
+            print("❌ No valid agent configured!", file=sys.stderr)
             print(f"Available agents: {', '.join(AGENTS.keys())}", file=sys.stderr)
             print("Set 'default_agent' in ~/.agent_settings.json", file=sys.stderr)
             logger.info("No valid agent configured; exiting")
@@ -324,15 +313,15 @@ class PollingMonitorStrategy(MonitorStrategy):
 
         print(
             f"""
-\u2554{'=' * 60}\u2557
-\u2551  {agent['emoji']} {agent['name']} Monitor - Watching for mentions
-\u2560{'=' * 60}\u2563
-\u2551  Agent:    {agent['name']} ({agent['role']})
-\u2551  Channel:  {channel}
-\u2551  Polling:  Every {args.interval}s (+{POLL_JITTER}s jitter)
-\u2551  Runtime:  max {MAX_RUNTIME // 60} minutes
-\u2551  Mentions: {', '.join(agent['mentions'])}
-\u255a{'=' * 60}\u255d
+╔{'=' * 60}╗
+║  {agent['emoji']} {agent['name']} Monitor - Watching for mentions
+╠{'=' * 60}╣
+║  Agent:    {agent['name']} ({agent['role']})
+║  Channel:  {channel}
+║  Polling:  Every {args.interval}s (+{POLL_JITTER}s jitter)
+║  Runtime:  max {MAX_RUNTIME // 60} minutes
+║  Mentions: {', '.join(agent['mentions'])}
+╚{'=' * 60}╝
 """,
             flush=True,
         )
@@ -391,7 +380,7 @@ class PollingMonitorStrategy(MonitorStrategy):
 
                 if time.time() - start_time >= MAX_RUNTIME:
                     print(
-                        f"\n\u23f0 Max runtime ({MAX_RUNTIME // 60} minutes) reached."
+                        f"\n⏰ Max runtime ({MAX_RUNTIME // 60} minutes) reached."
                         " Stopping.",
                         flush=True,
                     )
@@ -403,7 +392,7 @@ class PollingMonitorStrategy(MonitorStrategy):
                 if rate_limiter.is_backing_off():
                     remaining = rate_limiter.get_remaining_backoff()
                     print(
-                        f"\u23f3 Rate limit backoff: {remaining:.0f}s remaining...",
+                        f"⏳ Rate limit backoff: {remaining:.0f}s remaining...",
                         flush=True,
                     )
                     logger.info(f"Rate limit backoff: {remaining:.0f}s remaining.")
@@ -421,7 +410,7 @@ class PollingMonitorStrategy(MonitorStrategy):
                         time.sleep(min(backoff_time, 30))
                     else:
                         print(
-                            f"\u26a0\ufe0f Error reading messages: {e}",
+                            f"⚠️ Error reading messages: {e}",
                             file=sys.stderr,
                         )
                         logger.error(f"Error reading messages: {e}")
@@ -476,7 +465,7 @@ class PollingMonitorStrategy(MonitorStrategy):
                     if blocked_msg:
                         iface.say(blocked_msg)
                         print(
-                            "\U0001f6ab Cost limit exceeded" " \u2014 dispatch blocked",
+                            "🚫 Cost limit exceeded — dispatch blocked",
                             flush=True,
                         )
                         logger.warning("Cost limit exceeded — dispatch blocked")

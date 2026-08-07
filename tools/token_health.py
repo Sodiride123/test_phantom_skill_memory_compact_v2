@@ -21,44 +21,13 @@ Python API:
 
 import json
 import os
-import subprocess
 import sys
 
+from clients.token_resolver import resolve_github_token
 from messaging import get_messaging_interface
 
-MCP_TOKEN_FILE = "/dev/shm/mcp-token"
 
-
-def _parse_mcp_tokens(filepath: str = MCP_TOKEN_FILE) -> dict:
-    """Parse /dev/shm/mcp-token into a dict of service → value.
-
-    Each line is either ``KEY=value`` or ``KEY={"json": "object"}``.
-    Returns an empty dict if the file is missing or unreadable.
-    """
-    tokens: dict = {}
-    try:
-        with open(filepath, "r") as f:
-            content = f.read()
-        for line in content.strip().split("\n"):
-            if "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            key = key.strip()
-            value = value.strip()
-            if value.startswith("{"):
-                try:
-                    value = json.loads(value)
-                except json.JSONDecodeError:
-                    pass
-            tokens[key] = value
-    except FileNotFoundError:
-        pass
-    except Exception as e:
-        print(f"⚠️ Error parsing {filepath}: {e}", file=sys.stderr)
-    return tokens
-
-
-def check_messaging_token(filepath: str = MCP_TOKEN_FILE) -> dict:
+def check_messaging_token() -> dict:
     """Validate the active messaging channel credentials via the ABC.
 
     Delegates entirely to the adapter's ``check_messaging_health()`` — no
@@ -77,53 +46,18 @@ def check_messaging_token(filepath: str = MCP_TOKEN_FILE) -> dict:
         return {"service": channel, "status": "error", "message": str(e)}
 
 
-def check_github_token(filepath: str = MCP_TOKEN_FILE) -> dict:
-    """Validate the GitHub token in the mcp-token file via `gh auth status`.
+def check_github_token() -> dict:
+    """Validate and rotate the GitHub token via the 3-tier resolver.
 
-    `gh auth status` checks the session gh is actually logged in with.
     Returns service/status/message; never raises.
     """
-    tokens = _parse_mcp_tokens(filepath)
-    gh_data = tokens.get("Github", {})
-    has_token = isinstance(gh_data, dict) and bool(gh_data.get("access_token"))
-
-    if not has_token:
-        return {
-            "service": "github",
-            "status": "missing",
-            "message": "No GitHub token in mcp-token",
-        }
-
-    try:
-        result = subprocess.run(
-            ["gh", "auth", "status"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except FileNotFoundError:
-        return {"service": "github", "status": "error", "message": "gh not installed"}
-    except subprocess.TimeoutExpired:
-        return {
-            "service": "github",
-            "status": "error",
-            "message": "gh auth status timed out",
-        }
-    except Exception as e:
-        return {"service": "github", "status": "error", "message": str(e)}
-
-    if result.returncode == 0:
-        return {"service": "github", "status": "ok"}
-    return {
-        "service": "github",
-        "status": "invalid",
-        "message": (result.stderr or result.stdout).strip()[:200],
-    }
+    result = resolve_github_token()
+    return {"service": "github", **result}
 
 
-def check_all(filepath: str = MCP_TOKEN_FILE) -> list[dict]:
+def check_all() -> list[dict]:
     """Run all token checks and return their result dicts."""
-    return [check_messaging_token(filepath), check_github_token(filepath)]
+    return [check_messaging_token(), check_github_token()]
 
 
 def main():
@@ -133,14 +67,9 @@ def main():
         description="Validate messaging channel and GitHub tokens"
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
-    parser.add_argument(
-        "--file",
-        default=MCP_TOKEN_FILE,
-        help=f"mcp-token path (default: {MCP_TOKEN_FILE})",
-    )
     args = parser.parse_args()
 
-    results = check_all(args.file)
+    results = check_all()
 
     if args.json:
         print(json.dumps(results, indent=2))
