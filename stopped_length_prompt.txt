@@ -1,0 +1,2 @@
+You were stopped because of the number of tools calls reached its maximum. Summarize the current progress and report back to the user.
+You should create a github issues, so the background agent will continue working on the task, while you maintain your role of a lightweight monitor.

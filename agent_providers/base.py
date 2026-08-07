@@ -23,11 +23,12 @@ from typing import Callable, Optional
 
 @dataclass
 class AgentRunConfig:
-    """Configure agent provider to run monitor invocation."""
+    """Configure agent provider to run an invocation."""
 
     prompt: str
     system_prompt_path: Optional[Path] = None
     system_prompt_enabled: bool = False
+    system_prompt_mode: str = "replace"  # "replace" or "append"
     tools: list[str] = field(default_factory=lambda: ["Bash", "Edit", "Read", "Write"])
     timeout_seconds: int = 900
     session_name: str = "monitor"
@@ -35,6 +36,7 @@ class AgentRunConfig:
     env: dict[str, str] = field(default_factory=dict)
 
     process_label: str = "monitor"
+    title: Optional[str] = "Agent Run"
 
 
 @dataclass
@@ -45,6 +47,7 @@ class AgentRunResult:
     stderr: str = ""
     exit_code: int = 0
     timed_out: bool = False
+    parsed: object = None  # ClaudeResult when set by ClaudeProvider
 
 
 class AgentProvider(ABC):

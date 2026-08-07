@@ -21,6 +21,9 @@ from utils.agent_files_logs import (
 
 LOG_FILE = Path("/workspace/logs/monitor_length_hook.log")
 
+# MONITOR_TURNS_THRESHOLD = 2 # for test
+STATE_FILE_PATH = "/workspace/ninja/stop_hook_length_state.json"
+
 
 def _log(msg: str) -> None:
     try:
@@ -69,7 +72,14 @@ def build_hook_output(*, hook_input: dict) -> dict:
             )
         return {}
 
-    if sentinel.exists():
+    # this should be only when it is warned for the current monitor
+    try:
+        with open(STATE_FILE_PATH, "r") as file:
+            state = json.loads(file.read())["stopped_by_length"]
+    except:
+        state = False
+
+    if sentinel.exists() and state is True:
         _log(f"skip session={session_key} turns={turns} (already warned)")
         return {}
 
@@ -78,11 +88,17 @@ def build_hook_output(*, hook_input: dict) -> dict:
         f"warn session={session_key} turns={turns} "
         f"threshold={MONITOR_TURNS_THRESHOLD}"
     )
+
+    with open(STATE_FILE_PATH, "w") as file:
+        file.write(json.dumps({"stopped_by_length": True}))
+
     return {
+        "continue": False,
+        "stopReason": "More than maximum allowed turns!",
         "hookSpecificOutput": {
             "hookEventName": "PostToolUse",
             "additionalContext": HANDOFF_CONTEXT,
-        }
+        },
     }
 
 

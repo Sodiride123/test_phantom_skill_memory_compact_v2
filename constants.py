@@ -63,6 +63,11 @@ HANDOFF_CONTEXT = (
 CODEX_CONFIG_DIR = Path.home() / ".codex"
 CODEX_LOG_DIR = CODEX_CONFIG_DIR / "sessions"
 CODEX_CONFIG_FILE = CODEX_CONFIG_DIR / "config.toml"
-CODEX_SETTINGS_FILE = Path(__file__).parent / "codex_settings.json"
+CODEX_SETTINGS_FILE = CODEX_CONFIG_DIR / "codex_settings.json"
 
 COMMON_LOGGER_NAME = "common"
+
+# These env vars are used by the Codex harness to set the headers for the request
+ENV_VAR_TASK_ID = "NINJA_TASK_ID"
+ENV_VAR_FEATURE = "NINJA_FEATURE"
+ENV_VAR_CONVERSATION_ID = "NINJA_CONVERSATION_ID"

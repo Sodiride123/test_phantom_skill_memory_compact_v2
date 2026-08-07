@@ -614,6 +614,71 @@ merge_upstream() {
     exit 1
 }
 
+# migrate_agent_config — fix legacy "phantom" default_agent left over from
+# pre-rebrand installs.
+migrate_agent_config() {
+    local cfg="/root/.agent_settings.json"
+    [[ -f "$cfg" ]] || return 0
+    local current
+    current=$(/usr/local/bin/python -c \
+        "import json,sys; d=json.load(open('$cfg')); print(d.get('default_agent',''))" 2>/dev/null) || return 0
+    if [[ "$current" != "ninja" && -n "$current" ]]; then
+        /usr/local/bin/python -c "
+import json, sys
+p = '$cfg'
+with open(p) as f: d = json.load(f)
+d['default_agent'] = 'ninja'
+with open(p, 'w') as f: json.dump(d, f, indent=2)
+print(f'migrated default_agent: {sys.argv[1]} -> ninja', file=sys.stderr)
+" "$current" 2>&1 | while read -r line; do log "$line"; done
+    fi
+}
+
+# migrate_session_ids — seed ~/.claude_state/<role>.id from existing JSONL
+# transcripts so the first post-upgrade run resumes the existing session.
+# Also migrates Codex session IDs from the old /workspace/ninja/codex_settings.json
+# to the new ~/.codex/codex_settings.json.
+migrate_session_ids() {
+    # --- Claude Code sessions ---
+    local state_dir="$HOME/.claude_state"
+    local projects_dir="$HOME/.claude/projects"
+    if [[ -d "$projects_dir" ]]; then
+        local role
+        for role in orchestrator monitor; do
+            local id_file="$state_dir/${role}.id"
+            [[ -f "$id_file" ]] && continue
+            local found=""
+            while IFS= read -r jsonl; do
+                [[ -z "$jsonl" ]] && continue
+                if head -20 "$jsonl" 2>/dev/null | grep -qE \
+                    "\"(customTitle|agentName)\"[[:space:]]*:[[:space:]]*\"${role}\""; then
+                    found="$jsonl"
+                    break
+                fi
+            done < <(find "$projects_dir" -name '*.jsonl' -printf '%T@ %p\n' 2>/dev/null \
+                     | sort -rn | cut -d' ' -f2-)
+
+            [[ -z "$found" ]] && continue
+
+            local uuid
+            uuid=$(basename "$found" .jsonl)
+            mkdir -p "$state_dir"
+            printf '%s\n' "$uuid" > "$id_file"
+            log "migrated session ID for $role: $uuid (from $found)"
+        done
+    fi
+
+    # --- Codex sessions ---
+    # Old path was in the repo; new path is ~/.codex/codex_settings.json.
+    local old_codex="$NINJA_HOME/codex_settings.json"
+    local new_codex="$HOME/.codex/codex_settings.json"
+    if [[ -f "$old_codex" && ! -f "$new_codex" ]]; then
+        mkdir -p "$HOME/.codex"
+        cp "$old_codex" "$new_codex"
+        log "migrated Codex settings from $old_codex to $new_codex"
+    fi
+}
+
 # finalize — smoke-gate the merge. Healthy → push both branches
 # (--force-with-lease, refuses if the remote moved) + notify. Unhealthy →
 # reset customer-main to the pre-upgrade tag, restart on old code, notify.
@@ -758,6 +823,8 @@ main() {
     fi
 
     merge_upstream   # (tag, 3-way merge, LLM conflict resolution)
+    migrate_agent_config   # (fix legacy "phantom" → "ninja" in ~/.agent_settings.json)
+    migrate_session_ids    # (seed ~/.claude_state/ from existing JSONL transcripts)
     finalize         # (smoke check → push or roll back)
 }
 

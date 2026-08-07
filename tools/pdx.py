@@ -42,7 +42,7 @@ Subcommands
         Calls POST /ninja/integrations-gateway/actions/run on the gateway.
 
     pdx http <app_slug> <METHOD> <url>
-             [--json JSON] [--data STR]
+             [--json JSON] [--json-file PATH] [--data STR]
              [--header K:V ...] [--query k=v ...]
              [--event-id ID]
         Make a raw authenticated HTTP request through the Pipedream proxy — no LLM
@@ -55,11 +55,16 @@ Subcommands
             url                Upstream URL (e.g. 'https://api.github.com/user').
 
         Options:
-            --json JSON        JSON body as a string (mutually exclusive with --data).
-            --data STR         Raw body string (mutually exclusive with --json).
+            --json JSON        JSON body as a string.
+            --json-file PATH   Path to a file whose contents are the JSON body.
+                               Streams a large body past the single-argv per-arg
+                               limit. Takes precedence over --json and --data.
+            --data STR         Raw body string.
             --header K:V       Extra header to forward upstream (repeatable).
             --query k=v        Query string parameter (repeatable).
             --event-id ID      x-ninja-event-id traceability header.
+
+        Body precedence: --json-file, then --json, then --data.
 
     pdx tools [--apps SLUG,SLUG] [--limit N]
         Emit OpenAI-style function-calling schema for every action of
@@ -327,10 +332,20 @@ def _cmd_run(args: argparse.Namespace) -> None:
 
 def _cmd_http(args: argparse.Namespace) -> None:
     """Send a raw authenticated HTTP request through the Pipedream proxy."""
-    # Body: --json takes precedence over --data
+    # Body precedence: --json-file, then --json, then --data. --json-file reads
+    # the body from a file so a large body never rides a single argv element,
+    # which execve caps at MAX_ARG_STRLEN (128 KiB).
     json_body = None
     raw_body = None
-    if args.json_body:
+    if getattr(args, "json_file", ""):
+        try:
+            with open(args.json_file, "r", encoding="utf-8") as fh:
+                json_body = json.load(fh)
+        except OSError as exc:
+            _fail(f"cannot read --json-file {args.json_file!r}: {exc}", exit_code=1)
+        except json.JSONDecodeError as exc:
+            _fail(f"invalid JSON in --json-file {args.json_file!r}: {exc}", exit_code=1)
+    elif args.json_body:
         try:
             json_body = json.loads(args.json_body)
         except json.JSONDecodeError as exc:
@@ -541,12 +556,22 @@ def _build_parser() -> argparse.ArgumentParser:
         "--json",
         dest="json_body",
         default="",
-        help="JSON body as a string (mutually exclusive with --data).",
+        help="JSON body as a string.",
+    )
+    http_p.add_argument(
+        "--json-file",
+        dest="json_file",
+        default="",
+        help=(
+            "Path to a file whose contents are the JSON body; streams a large "
+            "body past the single-argv per-arg limit. Takes precedence over "
+            "--json and --data."
+        ),
     )
     http_p.add_argument(
         "--data",
         default="",
-        help="Raw body string (mutually exclusive with --json).",
+        help="Raw body string.",
     )
     http_p.add_argument(
         "--header",

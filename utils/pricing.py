@@ -1,16 +1,14 @@
 """
-Unified model pricing for Claude API usage tracking.
+Unified model pricing for API usage tracking.
 
-All prices are USD per million tokens. This is the single source of truth
-used by the dashboard (app.py), standalone monitor (claude_monitor.py),
-and CLI log analyzer (log_analyzer.py).
+All prices are USD per million tokens.
+Prices are aligned with the LiteLLM gateway config.yaml.
+Margin 1.0 = 2x markup applied to the base price.
 """
 
-# Pricing per million tokens (USD)
-# Patterns are matched against the model name string (case-insensitive, substring match).
-# More specific patterns must come before catch-alls (e.g. "opus-4-6" before "opus-4").
 MODEL_PRICING = {
-    # Opus 4.8 — same rate card as 4.7/4.6.
+    # --- Anthropic ----------------
+    # Opus 4.5 – 4.8 share the same rate card.
     "opus-4-8": {
         "input": 5.0,
         "output": 25.0,
@@ -27,8 +25,6 @@ MODEL_PRICING = {
         "cache_read": 0.50,
         "margin": 1.0,
     },
-    # Opus 4.7 (Apr 2026) — same rate card as 4.6, but new tokenizer produces
-    # up to 35% more tokens on the same text (per Anthropic migration guide).
     "opus-4-7": {
         "input": 5.0,
         "output": 25.0,
@@ -45,7 +41,6 @@ MODEL_PRICING = {
         "cache_read": 0.50,
         "margin": 1.0,
     },
-    # Opus 4.6
     "opus-4-6": {
         "input": 5.0,
         "output": 25.0,
@@ -62,7 +57,6 @@ MODEL_PRICING = {
         "cache_read": 0.50,
         "margin": 1.0,
     },
-    # Opus 4.5
     "opus-4-5": {
         "input": 5.0,
         "output": 25.0,
@@ -79,42 +73,30 @@ MODEL_PRICING = {
         "cache_read": 0.50,
         "margin": 1.0,
     },
-    # Opus 4.1
-    "opus-4-1": {
-        "input": 15.0,
-        "output": 75.0,
-        "cache_write_5m": 18.75,
-        "cache_write_1h": 30.0,
-        "cache_read": 1.50,
+    "opus-5": {
+        "input": 5.0,
+        "output": 25.0,
+        "cache_write_5m": 6.25,
+        "cache_write_1h": 10.0,
+        "cache_read": 0.50,
         "margin": 1.0,
     },
-    "opus-4.1": {
-        "input": 15.0,
-        "output": 75.0,
-        "cache_write_5m": 18.75,
-        "cache_write_1h": 30.0,
-        "cache_read": 1.50,
+    "fable-5": {
+        "input": 10.0,
+        "output": 50.0,
+        "cache_write_5m": 12.50,
+        "cache_write_1h": 20.0,
+        "cache_read": 1.0,
         "margin": 1.0,
     },
-    # Opus 4 (catch-all for older opus-4 models)
-    "opus-4": {
-        "input": 15.0,
-        "output": 75.0,
-        "cache_write_5m": 18.75,
-        "cache_write_1h": 30.0,
-        "cache_read": 1.50,
+    "sonnet-5": {
+        "input": 3.0,
+        "output": 15.0,
+        "cache_write_5m": 3.75,
+        "cache_write_1h": 6.0,
+        "cache_read": 0.30,
         "margin": 1.0,
     },
-    # Opus 3
-    "opus-3": {
-        "input": 15.0,
-        "output": 75.0,
-        "cache_write_5m": 18.75,
-        "cache_write_1h": 30.0,
-        "cache_read": 1.50,
-        "margin": 1.0,
-    },
-    # Sonnet 4.6
     "sonnet-4-6": {
         "input": 3.0,
         "output": 15.0,
@@ -131,7 +113,6 @@ MODEL_PRICING = {
         "cache_read": 0.30,
         "margin": 1.0,
     },
-    # Sonnet 4.5
     "sonnet-4-5": {
         "input": 3.0,
         "output": 15.0,
@@ -148,7 +129,6 @@ MODEL_PRICING = {
         "cache_read": 0.30,
         "margin": 1.0,
     },
-    # Sonnet 4 / 3.7
     "sonnet-4": {
         "input": 3.0,
         "output": 15.0,
@@ -157,15 +137,6 @@ MODEL_PRICING = {
         "cache_read": 0.30,
         "margin": 1.0,
     },
-    "sonnet-3.7": {
-        "input": 3.0,
-        "output": 15.0,
-        "cache_write_5m": 3.75,
-        "cache_write_1h": 6.0,
-        "cache_read": 0.30,
-        "margin": 1.0,
-    },
-    # Haiku 4.5
     "haiku-4-5": {
         "input": 1.0,
         "output": 5.0,
@@ -182,46 +153,44 @@ MODEL_PRICING = {
         "cache_read": 0.10,
         "margin": 1.0,
     },
-    # Haiku 3.5
-    "haiku-3.5": {
-        "input": 0.80,
-        "output": 4.0,
-        "cache_write_5m": 1.0,
-        "cache_write_1h": 1.6,
-        "cache_read": 0.08,
+    # --- OpenAI (routed through LiteLLM, margin 0.0) -----------------------
+    "gpt-5.6-sol": {
+        "input": 5.0,
+        "output": 30.0,
+        "cache_write_5m": 6.25,
+        "cache_write_1h": 0.0,
+        "cache_read": 0.50,
         "margin": 1.0,
     },
-    # Haiku 3
-    "haiku-3": {
-        "input": 0.25,
-        "output": 1.25,
-        "cache_write_5m": 0.30,
-        "cache_write_1h": 0.50,
-        "cache_read": 0.03,
-        "margin": 1.0,
-    },
-    # GPT-5.5 (OpenAI via Azure) — custom pricing set to Sonnet-4.6 equivalent
-    # per leadership request. Gateway config is authoritative; margin already baked in.
+    # GPT-5.5 via Azure — custom pricing (Sonnet-4.6 equivalent per gateway).
     "gpt-5.5": {
         "input": 3.0,
         "output": 15.0,
         "cache_write_5m": 3.75,
         "cache_write_1h": 0.0,
         "cache_read": 0.30,
-        "margin": 0.0,
+        "margin": 1.0,
     },
-    # Gemini 3.1 Pro (Google Vertex) — customer-facing price; margin already baked in.
+    # --- Kimi K3 (Fireworks) ------------------------------------------------
+    "kimi-k3": {
+        "input": 3.0,
+        "output": 15.0,
+        "cache_write_5m": 0.0,
+        "cache_write_1h": 0.0,
+        "cache_read": 0.30,
+        "margin": 1.0,
+    },
+    # --- Google Gemini (via Vertex) -----------------------------------------
     "gemini-3.1-pro": {
         "input": 2.0,
         "output": 12.0,
         "cache_write_5m": 0.0,
         "cache_write_1h": 0.0,
         "cache_read": 0.20,
-        "margin": 0.0,
+        "margin": 1.0,
     },
 }
 
-# Default fallback — Opus 4.8 pricing
 DEFAULT_PRICING = MODEL_PRICING["opus-4-8"]
 
 
