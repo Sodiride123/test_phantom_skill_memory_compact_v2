@@ -55,6 +55,14 @@ python preview.py --no-shot  # just print #data-health, no screenshot
 (Chart.js loads from a CDN, so keep an internet connection for the charts. The
 data itself is served from the local `data/models.json`.)
 
+On the Ninja sandbox the dashboard is served **persistently** at
+<http://localhost:8899> by the `ninja-model-pricing.service` systemd unit
+(`Restart=on-failure`, enabled at boot; logs in
+`/workspace/logs/model-pricing-dashboard.log`). Use `systemctl
+restart ninja-model-pricing.service` after changing files if a stale process
+is ever suspected — static files are read per-request, so restarts are rarely
+needed.
+
 `preview.py` first runs `validate_dataset.py` and prints a one-line PASS/FAIL
 summary, so a malformed dataset is caught before you look at the render.
 
