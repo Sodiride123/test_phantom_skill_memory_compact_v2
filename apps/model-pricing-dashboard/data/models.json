@@ -1,6 +1,6 @@
 {
-  "last_collected": "2026-08-07T06:34:00Z",
-  "generated_at": "2026-08-07T06:34:00.800848+00:00",
+  "last_collected": "2026-08-07T12:33:02Z",
+  "generated_at": "2026-08-07T12:33:02.966881+00:00",
   "currency": "USD",
   "price_unit": "per 1,000,000 tokens",
   "provider_count": 6,
@@ -1308,13 +1308,53 @@
     ],
     "context_upgrades": [
       {
+        "model": "OpenAI/GPT-5.6 Luna",
+        "from": 400000,
+        "to": 1050000
+      },
+      {
+        "model": "OpenAI/GPT-5.6 Terra",
+        "from": 400000,
+        "to": 1050000
+      },
+      {
+        "model": "OpenAI/GPT-5.6 Sol",
+        "from": 400000,
+        "to": 1050000
+      },
+      {
+        "model": "Google/Gemini 3.5 Flash",
+        "from": 1000000,
+        "to": 1048576
+      },
+      {
+        "model": "Google/Gemini 3 Pro",
+        "from": 1000000,
+        "to": 1048576
+      },
+      {
         "model": "xAI/Grok 4.20",
         "from": 2000000,
         "to": 1000000
       },
       {
+        "model": "xAI/Grok 4.5",
+        "from": 256000,
+        "to": 500000
+      },
+      {
         "model": "xAI/Grok 4",
         "from": 256000,
+        "to": 1000000
+      },
+      {
+        "model": "DeepSeek/DeepSeek V4 Flash",
+        "from": 128000,
+        "to": 1000000
+      },
+      {
+        "model": "DeepSeek/DeepSeek V4 Pro",
+        "from": 128000,
         "to": 1000000
       }
     ],
@@ -1334,6 +1374,14 @@
         "from": 6.0,
         "to": 2.5,
         "pct": 58.3,
+        "prev_provenance": "fallback"
+      },
+      {
+        "model": "xAI/Grok 4.5",
+        "field": "cached_price",
+        "from": 0.5,
+        "to": 0.3,
+        "pct": 40.0,
         "prev_provenance": "fallback"
       },
       {
@@ -1363,7 +1411,7 @@
     ],
     "drift_vs_previous_run": [],
     "coverage_regressions": [],
-    "history_compared_to": "2026-08-07T06:07:38Z",
+    "history_compared_to": "2026-08-07T06:34:00Z",
     "not_scraped": {
       "Mistral": "mistral.ai/pricing lists subscription plans only, not API token prices \u2014 kept on aggregator/fallback"
     }
