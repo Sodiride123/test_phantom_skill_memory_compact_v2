@@ -37,6 +37,23 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SETTINGS_FILE = REPO_ROOT / "settings.json"
 CLAUDE_SETTINGS = Path.home() / ".claude" / "settings.json"
 
+# Critical entry points in the current package-based repository layout. Keep
+# this list centralized so both diagnostics and tests validate the same
+# contract when files move during refactors.
+REQUIRED_FILES = (
+    "processes/orchestrator.py",
+    "messaging/slack/interface.py",
+    "browser/browser_interface.py",
+    "browser/browser_server.py",
+    "browser/observer.py",
+    "browser/actions.py",
+    "browser/stealth.py",
+    "agent-docs/NINJA_SPEC.md",
+    "agent-docs/AGENT_PROTOCOL.md",
+    "agent-docs/SLACK_INTERFACE.md",
+    "agent-docs/PIPEDREAM_CONNECT.md",
+)
+
 
 def check_browser() -> dict:
     """Check if browser server is running on port 9222."""
@@ -54,7 +71,7 @@ def check_browser() -> dict:
         return {
             "status": "error",
             "message": f"Browser server not responding: {e}",
-            "fix": "python ninja/browser_server.py start",
+            "fix": "python browser/browser_server.py start",
         }
 
 
@@ -107,20 +124,7 @@ def check_settings() -> dict:
 
 def check_files() -> dict:
     """Check that required project files exist."""
-    required = [
-        "orchestrator.py",
-        "slack_interface.py",
-        "browser_interface.py",
-        "ninja/browser_server.py",
-        "ninja/observer.py",
-        "ninja/actions.py",
-        "ninja/stealth.py",
-        "agent-docs/NINJA_SPEC.md",
-        "agent-docs/AGENT_PROTOCOL.md",
-        "agent-docs/SLACK_INTERFACE.md",
-        "agent-docs/PIPEDREAM_CONNECT.md",
-    ]
-    missing = [f for f in required if not (REPO_ROOT / f).exists()]
+    missing = [f for f in REQUIRED_FILES if not (REPO_ROOT / f).is_file()]
 
     if missing:
         return {
@@ -128,7 +132,10 @@ def check_files() -> dict:
             "message": f"Missing files: {', '.join(missing)}",
             "missing": missing,
         }
-    return {"status": "ok", "message": f"All {len(required)} required files present"}
+    return {
+        "status": "ok",
+        "message": f"All {len(REQUIRED_FILES)} required files present",
+    }
 
 
 def check_pipedream_health() -> dict:
@@ -195,7 +202,7 @@ def run_health_check(auto_fix: bool = False) -> dict:
         if results["browser"]["status"] == "error":
             try:
                 subprocess.run(
-                    ["python", "ninja/browser_server.py", "start"],
+                    [sys.executable, "browser/browser_server.py", "start"],
                     cwd=str(REPO_ROOT),
                     capture_output=True,
                     timeout=30,
