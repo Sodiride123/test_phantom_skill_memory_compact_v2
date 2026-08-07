@@ -70,16 +70,16 @@ fi
 echo ""
 echo "▶ Configuring Slack channel..."
 
-python "$NINJA_DIR/messaging/slack/interface.py" config \
+python -P "$NINJA_DIR/messaging/slack/interface.py" config \
     --set-channel "$SLACK_CHANNEL" \
     --set-channel-id "$SLACK_CHANNEL_ID"
 echo "  ✓ Slack channel set to: $SLACK_CHANNEL ($SLACK_CHANNEL_ID)"
 
 if [[ -n "$SLACK_WORKSPACE_ID" ]]; then
-    python "$NINJA_DIR/messaging/slack/interface.py" config \
+    python -P "$NINJA_DIR/messaging/slack/interface.py" config \
         --set-workspace-id "$SLACK_WORKSPACE_ID"
     echo "  ✓ Slack workspace ID set to: $SLACK_WORKSPACE_ID"
 fi
 
-python "$NINJA_DIR/messaging/slack/interface.py" config --set-agent "$SLACK_AGENT"
+python -P "$NINJA_DIR/messaging/slack/interface.py" config --set-agent "$SLACK_AGENT"
 echo "  ✓ Slack agent set to: $SLACK_AGENT (ninja)"
