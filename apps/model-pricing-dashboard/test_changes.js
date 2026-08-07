@@ -125,8 +125,8 @@ test("buildTrend blended needs both sides; non-numeric ignored", () => {
 
 test("buildTrend tolerates empty/malformed history", () => {
   assert.deepStrictEqual(buildTrend(null, "output_price"), { labels: [], providers: {} });
-  // A snapshot with no prices still contributes a label but an empty series.
-  assert.deepStrictEqual(buildTrend([{ date: "x" }], "output_price"), { labels: ["x"], providers: {} });
+  // A snapshot with no `prices` contributes nothing (no label, no series).
+  assert.deepStrictEqual(buildTrend([{ date: "x" }], "output_price"), { labels: [], providers: {} });
   assert.deepStrictEqual(buildTrend([], "output_price"), { labels: [], providers: {} });
 });
 
