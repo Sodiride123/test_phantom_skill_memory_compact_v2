@@ -226,6 +226,18 @@ class GetWorkspaceResponse(BaseModel):
     domain: Optional[str] = None
 
 
+class TokenResponse(BaseModel):
+    """Response schema for GET /tokens."""
+
+    access_token: str
+    expired: Optional[str] = None
+    user_id: Optional[str] = None
+    provider_id: str
+    scopes: List[str] = Field(default_factory=list)
+    email: Optional[str] = None
+    extra_field: Optional[Dict[str, Any]] = None
+
+
 # ---------------------------------------------------------------------------
 # Client
 # ---------------------------------------------------------------------------
@@ -421,3 +433,18 @@ class AgentEventCacheClient:
             },
         )
         return result
+
+    def get_token(self, provider_id: str) -> TokenResponse:
+        """Fetch a provider token from the token proxy.
+
+        GET /tokens?provider_id=Slack
+        GET /tokens?provider_id=Github
+        """
+        resp = requests.get(
+            f"{self._base_url}/tokens",
+            params={"provider_id": provider_id},
+            headers=self._headers(),
+            timeout=self._timeout,
+        )
+        resp.raise_for_status()
+        return TokenResponse.model_validate(resp.json())

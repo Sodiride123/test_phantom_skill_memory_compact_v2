@@ -13,6 +13,7 @@ DEFAULT_TASK_TITLE = "User prompt"
 AGENT_SETTINGS_PATH = Path.home() / ".agent_settings.json"
 COST_LIMIT_PATH = Path.home() / ".cost_limit.json"
 SANDBOX_METADATA_PATH = Path("/dev/shm/sandbox_metadata.json")
+MCP_TOKEN_PATH = Path("/dev/shm/mcp-token")
 PH_METADATA_PATH = Path("/dev/shm/ph_metadata.json")
 ORCHESTRATOR_CONFIG_PATH = Path.home() / ".orchestrator_config.json"
 

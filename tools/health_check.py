@@ -4,11 +4,12 @@ Health Check — Unified system diagnostics for Ninja.
 
 Checks all critical subsystems in one command:
   - Browser server (port 9222)
-  - Slack configuration and connectivity
-  - GitHub CLI authentication
+  - Messaging channel credentials (via active adapter ABC)
+  - GitHub CLI authentication (via 3-tier token resolver)
   - Settings file validity
   - Model configuration
-  - Browser stealth status
+  - Pipedream Connect gateway
+  - Claude CLI installation
 
 Usage:
     python tools/health_check.py              # Human-readable output
@@ -28,13 +29,13 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from constants import AGENT_SETTINGS_PATH, SANDBOX_METADATA_PATH
+from constants import SANDBOX_METADATA_PATH
+from tools.token_health import check_github_token, check_messaging_token
 from utils.pipedream import PipedreamClient, PipedreamError
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SETTINGS_FILE = REPO_ROOT / "settings.json"
 CLAUDE_SETTINGS = Path.home() / ".claude" / "settings.json"
-MCP_TOKEN_FILE = Path("/dev/shm/mcp-token")
 
 
 def check_browser() -> dict:
@@ -55,85 +56,6 @@ def check_browser() -> dict:
             "message": f"Browser server not responding: {e}",
             "fix": "python ninja/browser_server.py start",
         }
-
-
-def check_slack() -> dict:
-    """Check Slack configuration."""
-    if not AGENT_SETTINGS_PATH.exists():
-        return {
-            "status": "error",
-            "message": f"Config file not found: {AGENT_SETTINGS_PATH}",
-            "fix": "python slack_interface.py config --set-agent ninja",
-        }
-
-    try:
-        with open(AGENT_SETTINGS_PATH) as f:
-            config = json.load(f)
-
-        agent = config.get("default_agent", "")
-        channel = config.get("default_channel", "")
-        bot_token = config.get("bot_token", "")
-
-        issues = []
-        if not agent:
-            issues.append("No default_agent configured")
-        if not channel:
-            issues.append("No default_channel configured")
-        if not bot_token:
-            issues.append("No bot_token configured")
-
-        if issues:
-            return {
-                "status": "warning",
-                "message": "; ".join(issues),
-                "agent": agent,
-                "channel": channel,
-            }
-
-        return {
-            "status": "ok",
-            "message": "Slack configured",
-            "agent": agent,
-            "channel": channel,
-        }
-    except (json.JSONDecodeError, IOError) as e:
-        return {"status": "error", "message": f"Cannot read config: {e}"}
-
-
-def check_github() -> dict:
-    """Check GitHub CLI authentication."""
-    if not shutil.which("gh"):
-        return {"status": "error", "message": "GitHub CLI (gh) not installed"}
-
-    try:
-        result = subprocess.run(
-            ["gh", "auth", "status"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode == 0:
-            # Extract account info from output
-            output = result.stdout + result.stderr
-            return {
-                "status": "ok",
-                "message": "GitHub authenticated",
-                "details": output.strip()[:200],
-            }
-        else:
-            has_token = MCP_TOKEN_FILE.exists()
-            return {
-                "status": "error",
-                "message": "GitHub not authenticated",
-                "token_available": has_token,
-                "fix": (
-                    "cat /dev/shm/mcp-token | python -c \"import sys,json; print(json.loads(sys.stdin.read().split('=',1)[1])['access_token'])\" | gh auth login --with-token"
-                    if has_token
-                    else "No token found at /dev/shm/mcp-token"
-                ),
-            }
-    except subprocess.TimeoutExpired:
-        return {"status": "error", "message": "GitHub auth check timed out"}
 
 
 def check_settings() -> dict:
@@ -259,8 +181,8 @@ def run_health_check(auto_fix: bool = False) -> dict:
     """
     results = {
         "browser": check_browser(),
-        "slack": check_slack(),
-        "github": check_github(),
+        "messaging": check_messaging_token(),
+        "github": check_github_token(),
         "settings": check_settings(),
         "files": check_files(),
         "pipedream": check_pipedream_health(),
@@ -284,29 +206,7 @@ def run_health_check(auto_fix: bool = False) -> dict:
             except Exception:
                 pass
 
-        # Fix 2: GitHub login if token available
-        if results["github"]["status"] == "error" and MCP_TOKEN_FILE.exists():
-            try:
-                # Read token
-                content = MCP_TOKEN_FILE.read_text()
-                for line in content.strip().split("\n"):
-                    if line.startswith("Github="):
-                        token = json.loads(line[7:]).get("access_token", "")
-                        if token:
-                            subprocess.run(
-                                ["gh", "auth", "login", "--with-token"],
-                                input=token,
-                                capture_output=True,
-                                text=True,
-                                timeout=15,
-                            )
-                            results["github"] = check_github()
-                            if results["github"]["status"] == "ok":
-                                results["github"]["fixed"] = True
-            except Exception:
-                pass
-
-        # Fix 3: Regenerate settings.json
+        # Fix 2: Regenerate settings.json
         if results["settings"]["status"] != "ok":
             try:
                 sys.path.insert(0, str(REPO_ROOT))

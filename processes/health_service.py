@@ -44,7 +44,6 @@ from clients.litellm_client import (
     get_headers,
 )
 from clients.posthog_client import capture
-from messaging import get_messaging_interface
 from processes.common import MONITOR_HEARTBEAT_FILE
 from tenacity import (
     retry,
@@ -52,7 +51,7 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
-from tools.token_health import check_github_token
+from tools.token_health import check_github_token, check_messaging_token
 from utils.pipedream import PipedreamClient
 
 # How often to check, in seconds.
@@ -97,58 +96,21 @@ def _emit_error(event: str, status: str, **extra) -> None:
     capture(event, {"error": 1, "status": status, **extra})
 
 
-def check_messaging_health() -> int:
-    """Validate the active messaging channel credentials via the ABC.
-
-    Resolves the active channel from MESSAGING_CHANNEL env-var (default: slack)
-    and delegates to the adapter's check_messaging_health() implementation.
-    Returns 1 on error, 0 when credentials are valid.
-    """
-    channel = os.environ.get("MESSAGING_CHANNEL", "slack")
-    try:
-        result = get_messaging_interface().check_messaging_health()
-    except Exception as e:
-        result = {"service": channel, "status": "error", "message": str(e)}
+def _token_check_to_int(result: dict) -> int:
+    """Turn a ``token_health`` result dict into 0/1, with log + PostHog on failure."""
+    service = result.get("service", "unknown")
 
     if result["status"] == "ok":
-        _print(f"🔑 {channel} token OK")
+        _print(f"🔑 {service} token OK")
         return 0
 
-    _emit_error(
-        f"ninja {channel} health",
-        result["status"],
-        message=result.get("message", ""),
+    detail = result.get("message", "")
+    status_message = (
+        f"{service} token ERROR (status={result['status']}"
+        f"{', ' + detail if detail else ''})"
     )
-    _print(
-        f"🔑 {channel} token ERROR (status={result['status']}"
-        f"{', ' + result['message'] if result.get('message') else ''})"
-    )
-    return 1
-
-
-def check_github_health() -> int:
-    """Emit ``ninja github health`` (error=1) only if the GitHub token is bad.
-
-    Returns 1 on error, 0 when the token is valid. A missing token counts as an
-    error (logged as "Github token not found").
-    """
-    result = check_github_token()
-    if result["status"] == "ok":
-        _print("🔑 GitHub token OK")
-        return 0
-
-    if result["status"] == "missing":
-        status_message = "Github token not found"
-    else:
-        status_message = (
-            f"GitHub token ERROR (status={result['status']}"
-            f"{', ' + result['message'] if result.get('message') else ''})",
-        )
-
     _print(status_message)
-    _emit_error(
-        "ninja github health", status_message, message=result.get("message", "")
-    )
+    _emit_error(f"ninja {service} health", status_message, message=detail)
     return 1
 
 
@@ -383,8 +345,8 @@ def main():
         # has had time to write its first heartbeat (ninja-upgrade.sh documents
         # this). The 15-minute interval loop below performs this check instead.
         results = {
-            "messaging": _safe(check_messaging_health),
-            "github": _safe(check_github_health),
+            "messaging": _safe(lambda: _token_check_to_int(check_messaging_token())),
+            "github": _safe(lambda: _token_check_to_int(check_github_token())),
             "litellm": _safe(check_litellm_health),
             "pipedream": _safe(check_pipedream_health),
             "vpn": _safe(check_vpn_health),
@@ -403,8 +365,8 @@ def main():
     )
 
     checks = (
-        ("messaging", check_messaging_health),
-        ("github", check_github_health),
+        ("messaging", lambda: _token_check_to_int(check_messaging_token())),
+        ("github", lambda: _token_check_to_int(check_github_token())),
         ("litellm", check_litellm_health),
         ("pipedream", check_pipedream_health),
         ("vpn", check_vpn_health),

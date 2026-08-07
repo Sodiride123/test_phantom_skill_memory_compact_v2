@@ -29,13 +29,14 @@ from pathlib import Path
 
 from agent_providers.base import AgentRunConfig
 from agent_providers.claude.claude_output import primary_model
-from agent_providers.claude.claude_provider import ClaudeProvider, detect_api_error
+from agent_providers.claude.claude_provider import ClaudeProvider
 from agent_providers.codex.codex_provider import parse_codex_output
 
 # Import centralized agent configuration
 from agents_config import AGENTS
 from clients.posthog_client import capture, is_feature_enabled
 from clients.super_ninja_client import get_thread_id
+from clients.token_resolver import resolve_github_token
 from constants import (
     AGENT_SETTINGS_PATH,
     CLAUDE_RUN_ORCHESTRATOR_TIMEOUT_SECONDS,
@@ -389,72 +390,11 @@ def ensure_settings_file(logger: logging.Logger = None) -> bool:
         return False
 
 
-def get_github_token() -> str | None:
-    """Read GitHub token from /dev/shm/mcp-token file."""
-    if not MCP_TOKEN_FILE.exists():
-        return None
-
-    try:
-        content = MCP_TOKEN_FILE.read_text()
-        # Parse Github={"access_token": "..."} format
-        for line in content.strip().split("\n"):
-            if line.startswith("Github="):
-                json_str = line[7:]  # Remove 'Github=' prefix
-                data = json.loads(json_str)
-                return data.get("access_token")
-    except (json.JSONDecodeError, IOError, KeyError) as e:
-        return None
-
-    return None
-
-
 def login_github_cli(logger: logging.Logger) -> bool:
-    """Login to GitHub CLI using token from /dev/shm/mcp-token."""
-    token = get_github_token()
-
-    if not token:
-        logger.warning("⚠️  No GitHub token found in /dev/shm/mcp-token")
-        return False
-
-    # Check if gh is installed
-    if not shutil.which("gh"):
-        logger.warning("⚠️  GitHub CLI (gh) not installed")
-        return False
-
-    try:
-        # Login using the token via stdin
-        logger.info("🔐 Logging into GitHub CLI...")
-        result = subprocess.run(
-            ["gh", "auth", "login", "--with-token"],
-            input=token,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if result.returncode == 0:
-            # Verify login
-            verify = subprocess.run(
-                ["gh", "auth", "status"], capture_output=True, text=True, timeout=10
-            )
-            if verify.returncode == 0:
-                # Extract username from status output
-                logger.info("✅ GitHub CLI authenticated successfully")
-                logger.debug(f"GitHub status: {verify.stdout.strip()}")
-                return True
-            else:
-                logger.warning(f"⚠️  GitHub auth verification failed: {verify.stderr}")
-                return False
-        else:
-            logger.warning(f"⚠️  GitHub login failed: {result.stderr}")
-            return False
-
-    except subprocess.TimeoutExpired:
-        logger.error("❌ GitHub login timed out")
-        return False
-    except Exception as e:
-        logger.error(f"❌ GitHub login error: {e}")
-        return False
+    """Resolve a GitHub token (3-tier) and login the gh CLI."""
+    logger.info("🔐 Resolving GitHub token (3-tier)...")
+    result = resolve_github_token()
+    return result["status"] == "ok"
 
 
 def check_single_instance():
